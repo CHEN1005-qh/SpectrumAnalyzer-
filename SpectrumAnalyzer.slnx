@@ -1,0 +1,9 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="SpectrumAnalyzer/SpectrumAnalyzer.csproj" Id="43590436-a73e-4d83-a4f1-8d98be0b1059">
+    <Platform Solution="*|x86" Project="x86" />
+  </Project>
+</Solution>
