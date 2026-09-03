@@ -11,6 +11,8 @@ namespace SpectrumAnalyzer
 {
     public class SpectralSample
     {
+        // 可选的来源ID（例如参考库的数据库主键）
+        public int? Id { get; set; }
         public string Label { get; set; }
         public double[] Spectrum { get; set; }
     }
@@ -19,6 +21,16 @@ namespace SpectrumAnalyzer
     {
         public string PredictedClass { get; set; }
         public double Confidence { get; set; }
+        // 返回参与投票的邻居列表（按距离升序）
+        public List<Neighbor> Neighbors { get; set; } = new List<Neighbor>();
+    }
+
+    public class Neighbor
+    {
+        public string Label { get; set; }
+        public int? SourceId { get; set; }
+        public double Distance { get; set; }
+        public double Weight { get; set; }
     }
 
     public class KnnClassifier
@@ -34,6 +46,7 @@ namespace SpectrumAnalyzer
         {
             public string Label { get; set; }
             public Vector<double> ProjectedFeatures { get; set; }
+            public int? SourceId { get; set; }
         }
 
         public KnnClassifier(int k = 3, int pcaComponents = 5)
@@ -110,9 +123,25 @@ namespace SpectrumAnalyzer
                 _trainedSamples.Add(new PcaProjectedSample
                 {
                     Label = trainingSamples[i].Label,
-                    ProjectedFeatures = projectedMatrix.Row(i)
+                    ProjectedFeatures = projectedMatrix.Row(i),
+                    SourceId = trainingSamples[i].Id
                 });
             }
+        }
+
+        /// <summary>
+        /// 预测未知光谱物相归属 (实例方法，返回KnnResult)
+        /// </summary>
+        public KnnResult Predict(double[] rawSpectrum)
+        {
+            // 复用底层实现并返回包含邻居信息的结果
+            string predictedClass = Predict(rawSpectrum, out double confidence, out List<Neighbor> neighbors);
+            return new KnnResult
+            {
+                PredictedClass = predictedClass,
+                Confidence = confidence,
+                Neighbors = neighbors
+            };
         }
 
         /// <summary>
@@ -120,6 +149,16 @@ namespace SpectrumAnalyzer
         /// </summary>
         public string Predict(double[] rawSpectrum, out double confidence)
         {
+            // 旧方法保持向后兼容，调用新的内部实现并忽略 neighbors 输出
+            return Predict(rawSpectrum, out confidence, out _);
+        }
+
+        /// <summary>
+        /// 扩展预测方法：同时返回邻居列表（含距离与权重）
+        /// </summary>
+        public string Predict(double[] rawSpectrum, out double confidence, out List<Neighbor> neighbors)
+        {
+            neighbors = new List<Neighbor>();
             confidence = 0.0;
             if (_trainedSamples == null || _trainedSamples.Count == 0 || _projectionMatrix == null)
             {
@@ -132,11 +171,11 @@ namespace SpectrumAnalyzer
 
             var projectedVector = centeredVector * _projectionMatrix;
 
-            var distances = new List<(string Label, double Distance)>();
+            var distances = new List<(PcaProjectedSample Sample, double Distance)>();
             foreach (var trainSample in _trainedSamples)
             {
                 double dist = CalculateCosineDistance(projectedVector, trainSample.ProjectedFeatures);
-                distances.Add((trainSample.Label, dist));
+                distances.Add((trainSample, dist));
             }
 
             var kNearest = distances
@@ -153,19 +192,30 @@ namespace SpectrumAnalyzer
             foreach (var neighbor in kNearest)
             {
                 double weight = 1.0 / (neighbor.Distance + epsilon);
-                if (voteWeights.ContainsKey(neighbor.Label))
+                if (voteWeights.ContainsKey(neighbor.Sample.Label))
                 {
-                    voteWeights[neighbor.Label] += weight;
+                    voteWeights[neighbor.Sample.Label] += weight;
                 }
                 else
                 {
-                    voteWeights[neighbor.Label] = weight;
+                    voteWeights[neighbor.Sample.Label] = weight;
                 }
                 totalWeight += weight;
+
+                neighbors.Add(new Neighbor
+                {
+                    Label = neighbor.Sample.Label,
+                    SourceId = neighbor.Sample.SourceId,
+                    Distance = neighbor.Distance,
+                    Weight = weight
+                });
             }
 
             var winner = voteWeights.OrderByDescending(kv => kv.Value).First();
             confidence = winner.Value / totalWeight;
+
+            // 按距离升序返回邻居（便于上层显示）
+            neighbors = neighbors.OrderBy(n => n.Distance).ToList();
 
             return winner.Key;
         }

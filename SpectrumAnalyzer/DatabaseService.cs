@@ -6,8 +6,10 @@ using System.Data.SQLite;
 using System.Linq;
 using SpectrumAnalyzer;
 
-public class DatabaseService
+namespace SpectrumAnalyzer
 {
+    public class DatabaseService
+    {
     // 数据库连接字符串
     private string dbPath = "Data Source=RamanLibrary.db;Version=3;";
 
@@ -224,4 +226,4 @@ public class DatabaseService
             }
         }
     }
-}
+}}

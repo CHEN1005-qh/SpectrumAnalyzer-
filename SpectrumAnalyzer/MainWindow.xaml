@@ -252,14 +252,16 @@
                         </Grid.ColumnDefinitions>
 
                         <!-- 主功能入口 -->
-                        <Button Grid.Column="0" Content="📂 打开光谱数据" Style="{StaticResource PrimaryButtonStyle}" 
-                                Click="BtnOpen_Click" Height="32" Padding="15,0" HorizontalAlignment="Left" />
+                        <Button x:Name="BtnOpen" Grid.Column="0" Content="📂 打开光谱数据" Style="{StaticResource PrimaryButtonStyle}" 
+                                Height="32" Padding="15,0" HorizontalAlignment="Left" Click="BtnOpen_Click" />
 
                         <!-- 工具控制组 -->
                         <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                             <Button x:Name="BtnReset" Content="🔄 重置" Click="BtnReset_Click" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="8,0" Margin="0,0,5,0"/>
-                            <Button Content="📤 导出" Click="BtnExportLib_Click" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="8,0" Margin="0,0,5,0"/>
-                            <Button Content="📥 导入" Click="BtnImportLib_Click" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="8,0" Margin="0,0,5,0"/>
+                            <Button x:Name="BtnExport" Content="📤 导出" Click="BtnExport_Click" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="8,0" Margin="0,0,5,0"/>
+                            <Button x:Name="BtnImport" Content="📥 导入" Click="BtnImport_Click" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="8,0" Margin="0,0,5,0"/>
+                            <Button x:Name="BtnBulkExport" Content="📦 批量导出" Click="BtnBulkExport_Click" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="8,0" Margin="0,0,5,0"/>
+                            <Button x:Name="BtnBulkDelete" Content="🗑 批量删除" Click="BtnBulkDelete_Click" Style="{StaticResource DangerButtonStyle}" Height="32" Padding="8,0" Margin="0,0,5,0"/>
                             <Button x:Name="BtnDelete" Content="🗑 删除" Click="BtnDelete_Click" Style="{StaticResource DangerButtonStyle}" Height="32" Padding="8,0"/>
                         </StackPanel>
                     </Grid>
@@ -267,10 +269,10 @@
                     <!-- 2. 库视图切换（Segmented Tab） -->
                     <Border DockPanel.Dock="Top" Background="#F1F5F9" CornerRadius="8" Padding="2" Margin="0,0,0,12">
                         <UniformGrid Columns="2">
-                            <RadioButton x:Name="RbExperimental" Content="📊 实测光谱 (Raman)" IsChecked="True" 
-                                         Style="{StaticResource SegmentedTabStyle}" Click="ViewSwitch_Click"/>
+                            <RadioButton x:Name="RbExperimental" Content="📊 实测光谱" IsChecked="True" 
+                                         Style="{StaticResource SegmentedTabStyle}" Checked="RbExperimental_Checked"/>
                             <RadioButton x:Name="RbReference" Content="📚 标准参考库" 
-                                         Style="{StaticResource SegmentedTabStyle}" Click="ViewSwitch_Click"/>
+                                         Style="{StaticResource SegmentedTabStyle}" Checked="RbReference_Checked"/>
                         </UniformGrid>
                     </Border>
 
@@ -308,8 +310,8 @@
 
                         <!-- 左侧：算法微调控制组 -->
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="⚙ 算法参数" Click="BtnSettings_Click" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,6,0" Padding="12,5"/>
-                            <Button Content="⚡ 智能调优" Click="BtnAutoTune_Click" Style="{StaticResource SecondaryButtonStyle}" 
+                            <Button x:Name="BtnSettings" Content="⚙ 算法参数" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,6,0" Padding="12,5" Click="BtnSettings_Click"/>
+                            <Button Content="⚡ 智能调优" Style="{StaticResource SecondaryButtonStyle}" 
                                     Background="#EFF6FF" Foreground="#1D4ED8" BorderBrush="#BFDBFE" Margin="0,0,6,0" Padding="12,5"/>
                             <Button x:Name="BtnDoPreprocess" Content="✨ 预处理" Click="BtnDoPreprocess_Click" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,6,0" 
                                     Padding="15,5" FontWeight="Bold"/>
@@ -322,7 +324,7 @@
 
                         <!-- 右侧：比对与归档操作组 -->
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="➕ 入库" Click="BtnSaveToLib_Click" Style="{StaticResource SuccessButtonStyle}" Margin="0,0,8,0" Padding="12,5"/>
+                            <Button Content="➕ 入库" Style="{StaticResource SuccessButtonStyle}" Margin="0,0,8,0" Padding="12,5" Click="BtnAddToLibrary_Click"/>
 
                             <TextBlock Text="检索模式:" VerticalAlignment="Center" Margin="5,0,5,0" Foreground="#475569" FontSize="11" FontWeight="SemiBold"/>
                             <ComboBox x:Name="CmbSearchMode" Width="135" Height="28" Margin="0,0,10,0" SelectedIndex="0" VerticalContentAlignment="Center">
