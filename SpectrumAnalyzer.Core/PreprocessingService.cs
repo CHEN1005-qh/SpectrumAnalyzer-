@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json.Linq;
 using MathNet.Numerics;
 using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.Statistics;
 
-namespace SpectrumAnalyzer
+namespace SpectrumAnalyzer.Core
 {
     public class PeakInfo
     {
@@ -239,33 +240,64 @@ namespace SpectrumAnalyzer
             config.DespikeZ = 6.0;
         }
 
-        // --- 7. 特征峰相似度计算 (保留原峰位比对) ---
-        public static (double Score, int HitCount) CalculateSimilarity(
-    List<PeakInfo> samplePeaks,
-    List<dynamic> refPeaks,
-    double tolerance = 8.0,
-    bool enforcePureComponent = false) // === 新增：默认为 false，保证向后兼容 ===
+        // --- 6*. 参考峰列表解析（兼容纯数字数组与 {W,I} 对象数组）---
+        public static List<(double W, double I)> ParseReferencePeaks(string peaksJson)
         {
-            if (refPeaks == null || refPeaks.Count == 0 || samplePeaks.Count == 0) return (0, 0);
+            var peaks = new List<(double W, double I)>();
+            if (string.IsNullOrWhiteSpace(peaksJson))
+                return peaks;
 
-            double weightedHits = 0;
-            double totalRefWeight = 0;
-
-            foreach (var rp in refPeaks)
+            try
             {
-                double intensity = rp.I ?? 1.0;
-                totalRefWeight += intensity;
+                var token = JToken.Parse(peaksJson);
+                if (token.Type != JTokenType.Array)
+                    return peaks;
+
+                foreach (var item in token)
+                {
+                    if (item.Type == JTokenType.Integer || item.Type == JTokenType.Float)
+                    {
+                        peaks.Add((item.ToObject<double>(), 1.0));
+                    }
+                    else if (item.Type == JTokenType.Object)
+                    {
+                        var w = item["W"] ?? item["w"];
+                        if (w == null)
+                            continue;
+                        var i = item["I"] ?? item["i"];
+                        peaks.Add((w.ToObject<double>(), i != null ? i.ToObject<double>() : 1.0));
+                    }
+                }
+            }
+            catch
+            {
             }
 
-            int hitCount = 0;
+            return peaks;
+        }
 
-            // 建立哈希集合，用于追踪哪些实测峰已被标准库成功“认领”
-            HashSet<PeakInfo> matchedSamplePeaks = new HashSet<PeakInfo>();
+        // --- 7. 特征峰相似度计算（唯一权威实现）---
+        public static (double Score, int HitCount) CalculateSimilarity(
+            List<PeakInfo> samplePeaks,
+            List<(double W, double I)> refPeaks,
+            double tolerance = 8.0,
+            bool enforcePureComponent = false)
+        {
+            if (refPeaks == null || refPeaks.Count == 0 || samplePeaks == null || samplePeaks.Count == 0)
+                return (0, 0);
+
+            double totalRefWeight = refPeaks.Sum(rp => Math.Max(Math.Abs(rp.I), 1.0));
+            if (totalRefWeight <= 0)
+                return (0, 0);
+
+            double weightedHits = 0;
+            int hitCount = 0;
+            var matchedSamplePeaks = new HashSet<PeakInfo>();
 
             foreach (var rp in refPeaks)
             {
-                double refW = (double)rp.W;
-                double refI = (double)(rp.I ?? 1.0);
+                double refW = rp.W;
+                double refI = Math.Max(Math.Abs(rp.I), 1.0);
 
                 var matchedPeak = samplePeaks
                     .Where(sp => Math.Abs(sp.X - refW) <= tolerance)
@@ -275,45 +307,36 @@ namespace SpectrumAnalyzer
                 if (matchedPeak != null)
                 {
                     hitCount++;
-                    matchedSamplePeaks.Add(matchedPeak); // 记录已被认领的峰
+                    matchedSamplePeaks.Add(matchedPeak);
 
-                    double peakScore = 1.0;
                     double intensityDiff = Math.Abs(matchedPeak.Y - refI);
                     double intensityFactor = Math.Max(0, 1.0 - intensityDiff);
-
-                    weightedHits += (0.7 * peakScore + 0.3 * intensityFactor) * refI;
+                    weightedHits += (0.7 + 0.3 * intensityFactor) * refI;
                 }
             }
 
             double finalScore = (weightedHits / totalRefWeight) * 100;
 
-            // ==========================================================
-            // === 🚀 核心逻辑升级：条件性激活“未匹配强特征峰惩罚机制” ===
-            // ==========================================================
+            // 未匹配强特征峰惩罚机制：防止把混入的陌生强峰误判进匹配
             if (enforcePureComponent)
             {
-                // 找出实测谱中，那些没有被标准谱认领、且归一化后强度依然极强的主特征峰（Y > 0.35）
                 var unmatchedStrongPeaks = samplePeaks
                     .Where(sp => !matchedSamplePeaks.Contains(sp) && sp.Y > 0.35)
                     .ToList();
 
                 if (unmatchedStrongPeaks.Count > 0)
                 {
-                    // 每一个多出来的、未命中的强特征峰，都会按比例削减最终分数（例如每个扣 15%）
                     double penaltyFactor = 1.0 - (unmatchedStrongPeaks.Count * 0.15);
-                    penaltyFactor = Math.Max(0.15, penaltyFactor); // 设定惩罚下限，防止扣到负数
-
+                    penaltyFactor = Math.Max(0.15, penaltyFactor);
                     finalScore *= penaltyFactor;
                 }
             }
-            // ==========================================================
 
             if (samplePeaks.Count > refPeaks.Count * 2)
                 finalScore *= 0.9;
 
             finalScore = Math.Min(100, finalScore);
-
-            return (finalScore, hitCount);
+            return (Math.Round(finalScore, 1), hitCount);
         }
 
         // --- 8. 全谱相关性匹配 (HQI - 夹角余弦相似度) ---

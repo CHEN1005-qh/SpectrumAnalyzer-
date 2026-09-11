@@ -11,6 +11,8 @@ using MathNet.Numerics;
 using MathNet.Numerics.Statistics;
 using SpectrumAnalyzer.ViewModels;
 using SpectrumAnalyzer.Services;
+using SpectrumAnalyzer.Core;
+using SpectrumAnalyzer.Data;
 using Newtonsoft.Json;
 
 namespace SpectrumAnalyzer
@@ -679,27 +681,44 @@ namespace SpectrumAnalyzer
         }
 
         /// <summary>
-        /// 导出报告按钮
+        /// 导出报告按钮：将当前已处理光谱（含特征峰、最近一次分类结果与算法参数）导出为 JSON
         /// </summary>
         private void BtnExportReport_Click(object sender, RoutedEventArgs e)
         {
             var saveDialog = new SaveFileDialog
             {
+                Title = "导出光谱报告",
                 DefaultExt = ".json",
                 Filter = "JSON Files (*.json)|*.json|All Files (*.*)|*.*"
             };
 
-            if (saveDialog.ShowDialog() == true)
+            if (saveDialog.ShowDialog() != true) return;
+
+            try
             {
-                try
+                var payload = new
                 {
-                    // TODO: 导出处理结果到JSON
-                    MessageBox.Show("导出成功");
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"导出失败: {ex.Message}");
-                }
+                    ExportedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    SubstanceName = _viewModel?.CurrentSubstanceName,
+                    Classification = _viewModel?.ClassificationResult,
+                    ClassificationConfidence = _viewModel?.ClassificationConfidence,
+                    X = _viewModel?.CurrentXProcessed,
+                    Y = _viewModel?.CurrentYProcessed,
+                    Peaks = _viewModel?.CurrentPeaks?
+                        .Select(p => new { X = p.X, Y = p.Y }),
+                    AlgorithmConfig = _viewModel?.CurrentConfig
+                };
+
+                string json = JsonConvert.SerializeObject(payload, Formatting.Indented);
+                File.WriteAllText(saveDialog.FileName, json, System.Text.Encoding.UTF8);
+
+                MessageBox.Show(
+                    $"光谱报告已导出到:\n{saveDialog.FileName}\n\n共 {( _viewModel?.CurrentYProcessed?.Length ?? 0)} 个数据点。",
+                    "导出成功");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"导出失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

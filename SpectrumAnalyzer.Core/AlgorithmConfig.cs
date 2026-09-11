@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace SpectrumAnalyzer
+namespace SpectrumAnalyzer.Core
 {
     public class AlgorithmConfig
     {

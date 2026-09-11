@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using SpectrumAnalyzer;
+using SpectrumAnalyzer.Core;
 
-namespace SpectrumAnalyzer.Repositories
+namespace SpectrumAnalyzer.Data.Repositories
 {
     /// <summary>
     /// 光谱数据仓储接口 - 定义数据访问规范

@@ -1,13 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.LinearAlgebra.Double;
 
-namespace SpectrumAnalyzer
+namespace SpectrumAnalyzer.Core
 {
     public class SpectralSample
     {
@@ -249,7 +248,7 @@ namespace SpectrumAnalyzer
                 }
                 else if (tx >= sourceX[sourceX.Length - 1])
                 {
-                    resampledY[i] = sourceY[sourceY.Length - 1];
+                    resampledY[i] = sourceY[sourceX.Length - 1];
                 }
                 else
                 {
@@ -273,10 +272,10 @@ namespace SpectrumAnalyzer
             return resampledY;
         }
 
-        #region 静态预测与留一法交叉验证(LOOCV)评估引擎
+        #region 静态匹配与留一法交叉验证 (LOOCV) 评估引擎
 
         /// <summary>
-        /// 静态预测方法，保持 MainWindow 兼容性
+        /// 静态预测方法：以标准库为训练集构建分类器并预测目标光谱 (保持外部兼容)
         /// </summary>
         public static KnnResult Predict(double[] targetX, double[] targetY, List<ReferenceSpectrumModel> library, int k)
         {
@@ -321,28 +320,30 @@ namespace SpectrumAnalyzer
         }
 
         /// <summary>
-        /// 留一法交叉验证 (LOOCV) 跑分引擎
-        /// 完全使用实测数据库 testSet 自作为数据集，训练和测试内部闭环，排除 referenceSet 人工标准库干预。
+        /// 留一法交叉验证 (LOOCV)：完全使用实测数据库作为数据集，训练和测试内部闭环。
+        /// 仅接受强类型参数（RamanSpectrumModel / AlgorithmConfig），不再依赖反射提取光谱或配置。
         /// </summary>
         public static string RunIndependentValidation(
-            System.Collections.IEnumerable testSet,       // 实测数据集（LOOCV唯一数据源）
+            List<RamanSpectrumModel> testSet,   // 实测数据集（LOOCV 唯一数据源）
             string csvPath,
-            object currentConfig)
+            AlgorithmConfig currentConfig)
         {
-            if (testSet == null)
+            if (testSet == null || testSet.Count == 0)
             {
                 return "评估失败：实测数据集为空。";
             }
 
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-            // 1. 提取实测数据集中的所有光谱元数据
+            // 1. 从实测模型解包光谱数据（BLOB → double[]）
             var allRawSamples = new List<(string Label, double[] XData, double[] YData)>();
             foreach (var item in testSet)
             {
-                var (label, xData, yData) = ExtractLabelAndSpectrum(item);
+                double[] xData = DeserializeBinary(item?.X_cm);
+                double[] yData = DeserializeBinary(item?.Y_cm);
                 if (xData != null && yData != null && xData.Length > 1)
                 {
+                    string label = item?.Name ?? "Unknown";
                     allRawSamples.Add((label, xData, yData));
                 }
             }
@@ -356,7 +357,7 @@ namespace SpectrumAnalyzer
             // 2. 建立统一工作基准轴 (使用第一条实测光谱作为 commonX)
             double[] commonX = allRawSamples[0].XData;
 
-            // 3. 对所有实测样本在内存中应用当前物理预处理（去噪、SG平滑、基线扣除）并重采样对齐
+            // 3. 对所有实测样本应用当前物理预处理并重采样对齐
             var preprocessedSamples = new List<SpectralSample>();
             for (int i = 0; i < n; i++)
             {
@@ -377,10 +378,10 @@ namespace SpectrumAnalyzer
 
             for (int i = 0; i < n; i++)
             {
-                // 4.1 抽出第 i 个样本作为测试验证集 (Validation Set)
+                // 4.1 抽出第 i 个样本作为测试验证集
                 var testSample = preprocessedSamples[i];
 
-                // 4.2 剩下的 N-1 个实测样本作为当前轮次的训练集 (Training Set)
+                // 4.2 剩下的 N-1 个样本作为当前轮次的训练集
                 var trainingSamples = new List<SpectralSample>();
                 for (int j = 0; j < n; j++)
                 {
@@ -430,7 +431,7 @@ namespace SpectrumAnalyzer
 
             StringBuilder report = new StringBuilder();
             report.AppendLine("=== 实测数据库留一法交叉验证 (LOOCV) 学术评估报告 ===");
-            report.AppendLine($"数据校准声明 : 本次评估完全基于实测光谱数据库，已排除人工录入标准库干预。");
+            report.AppendLine("数据校准声明 : 本次评估完全基于实测光谱数据库，已排除人工录入标准库干预。");
             report.AppendLine($"执行时刻     : {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
             report.AppendLine($"样本总数 (N) : {n} 个（互为测试集与训练集迭代）");
             report.AppendLine($"正确归类数量 : {correctCount} 个");
@@ -444,138 +445,48 @@ namespace SpectrumAnalyzer
         }
 
         /// <summary>
-        /// 利用反射机制兼容不同实体类的光谱提取且自动解码 JSON 数据 (解耦 SubstanceModel)
+        /// 依据算法配置对单条光谱执行物理预处理（去毛刺、SG平滑、基线校正、归一化）—— 强类型实现，替代原反射调用。
         /// </summary>
-        private static (string Label, double[] XData, double[] YData) ExtractLabelAndSpectrum(object item)
+        private static double[] PreprocessSpectrum(double[] xs, double[] ys, AlgorithmConfig config)
         {
-            if (item == null) return (null, null, null);
-            var type = item.GetType();
+            if (config == null || ys == null) return ys;
 
-            string label = "Unknown";
-            var labelProp = type.GetProperty("SubstanceName") ?? type.GetProperty("Name") ?? type.GetProperty("Label");
-            if (labelProp != null)
+            double[] y = (double[])ys.Clone();
+
+            if (config.EnableDespike)
+                y = PreprocessingService.RemoveSpikes(y, config.DespikeWindow, config.DespikeZ);
+
+            if (config.EnableSmoothing)
+                y = PreprocessingService.SavitzkyGolaySmooth(y, config.SgWindowSize, config.SgOrder);
+
+            if (config.EnableBaseline)
             {
-                label = labelProp.GetValue(item)?.ToString() ?? "Unknown";
+                double[] baseline = config.BaselineMethod == "Snip"
+                    ? PreprocessingService.SnipBaseline(y, config.SnipIterations)
+                    : PreprocessingService.SavitzkyGolaySmooth(
+                        PreprocessingService.QuantileBaseline(y, config.BaselineWindow, config.BaselineQuantile),
+                        config.BaselineSmoothWindow, config.SgOrder);
+
+                for (int i = 0; i < y.Length; i++)
+                    y[i] = Math.Max(0, y[i] - baseline[i]);
             }
 
-            double[] xData = null;
-            var xProp = type.GetProperty("X_cm") ?? type.GetProperty("XData") ?? type.GetProperty("SpectrumX");
-            if (xProp != null)
-            {
-                var val = xProp.GetValue(item);
-                if (val is string jsonStr)
-                {
-                    try { xData = Newtonsoft.Json.JsonConvert.DeserializeObject<double[]>(jsonStr); } catch { }
-                }
-                else if (val is double[] arr) xData = arr;
-                else if (val is List<double> list) xData = list.ToArray();
-            }
+            if (config.EnableNormalization)
+                y = PreprocessingService.Normalize(y);
 
-            double[] yData = null;
-            var yProp = type.GetProperty("Y_cm") ?? type.GetProperty("YData") ?? type.GetProperty("SpectrumY") ?? type.GetProperty("YRaw") ?? type.GetProperty("Spectrum");
-            if (yProp != null)
-            {
-                var val = yProp.GetValue(item);
-                if (val is string jsonStr)
-                {
-                    try { yData = Newtonsoft.Json.JsonConvert.DeserializeObject<double[]>(jsonStr); } catch { }
-                }
-                else if (val is double[] arr) yData = arr;
-                else if (val is List<double> list) yData = list.ToArray();
-            }
-
-            return (label, xData, yData);
+            return y;
         }
 
         /// <summary>
-        /// 动态调用底层的 PreprocessingService 去除测试集基线及噪声干扰
+        /// 将二进制 BLOB 反序列化为 double[]（与实测库存储格式一致）。
         /// </summary>
-        private static double[] PreprocessSpectrum(double[] xs, double[] ys, object config)
+        private static double[] DeserializeBinary(byte[] data)
         {
-            if (config == null) return ys;
-            double[] processedY = (double[])ys.Clone();
-
-            try
-            {
-                var configType = config.GetType();
-
-                bool enableDespike = (bool)(configType.GetProperty("EnableDespike")?.GetValue(config) ?? false);
-                int despikeWindow = (int)(configType.GetProperty("DespikeWindow")?.GetValue(config) ?? 15);
-                double despikeZ = Convert.ToDouble(configType.GetProperty("DespikeZ")?.GetValue(config) ?? 6.0);
-
-                bool enableSmoothing = (bool)(configType.GetProperty("EnableSmoothing")?.GetValue(config) ?? false);
-                int sgWindowSize = (int)(configType.GetProperty("SgWindowSize")?.GetValue(config) ?? 15);
-                int sgOrder = (int)(configType.GetProperty("SgOrder")?.GetValue(config) ?? 2);
-
-                bool enableBaseline = (bool)(configType.GetProperty("EnableBaseline")?.GetValue(config) ?? false);
-                string baselineMethod = configType.GetProperty("BaselineMethod")?.GetValue(config)?.ToString() ?? "Snip";
-                int snipIterations = (int)(configType.GetProperty("SnipIterations")?.GetValue(config) ?? 50);
-                int baselineWindow = (int)(configType.GetProperty("BaselineWindow")?.GetValue(config) ?? 50);
-                double baselineQuantile = Convert.ToDouble(configType.GetProperty("BaselineQuantile")?.GetValue(config) ?? 0.05);
-                int baselineSmoothWindow = (int)(configType.GetProperty("BaselineSmoothWindow")?.GetValue(config) ?? 15);
-
-                bool enableNormalization = (bool)(configType.GetProperty("EnableNormalization")?.GetValue(config) ?? false);
-
-                var prepType = Type.GetType("SpectrumAnalyzer.PreprocessingService") ??
-                               AppDomain.CurrentDomain.GetAssemblies()
-                                        .SelectMany(a => a.GetTypes())
-                                        .FirstOrDefault(t => t.FullName == "SpectrumAnalyzer.PreprocessingService");
-
-                if (prepType != null)
-                {
-                    if (enableDespike)
-                    {
-                        var method = prepType.GetMethod("RemoveSpikes");
-                        if (method != null) processedY = (double[])method.Invoke(null, new object[] { processedY, despikeWindow, despikeZ });
-                    }
-
-                    if (enableSmoothing)
-                    {
-                        var method = prepType.GetMethod("SavitzkyGolaySmooth");
-                        if (method != null) processedY = (double[])method.Invoke(null, new object[] { processedY, sgWindowSize, sgOrder });
-                    }
-
-                    if (enableBaseline)
-                    {
-                        double[] baseline = null;
-                        if (baselineMethod == "Snip")
-                        {
-                            var method = prepType.GetMethod("SnipBaseline");
-                            if (method != null) baseline = (double[])method.Invoke(null, new object[] { processedY, snipIterations });
-                        }
-                        else
-                        {
-                            var methodQuantile = prepType.GetMethod("QuantileBaseline");
-                            var methodSmooth = prepType.GetMethod("SavitzkyGolaySmooth");
-                            if (methodQuantile != null && methodSmooth != null)
-                            {
-                                baseline = (double[])methodQuantile.Invoke(null, new object[] { processedY, baselineWindow, baselineQuantile });
-                                baseline = (double[])methodSmooth.Invoke(null, new object[] { baseline, baselineSmoothWindow, 2 });
-                            }
-                        }
-
-                        if (baseline != null)
-                        {
-                            for (int i = 0; i < processedY.Length; i++)
-                            {
-                                processedY[i] = Math.Max(0, processedY[i] - baseline[i]);
-                            }
-                        }
-                    }
-
-                    if (enableNormalization)
-                    {
-                        var method = prepType.GetMethod("Normalize");
-                        if (method != null) processedY = (double[])method.Invoke(null, new object[] { processedY });
-                    }
-                }
-            }
-            catch
-            {
-                // 反射降级
-            }
-
-            return processedY;
+            if (data == null || data.Length == 0) return null;
+            int count = data.Length / sizeof(double);
+            double[] result = new double[count];
+            Buffer.BlockCopy(data, 0, result, 0, data.Length);
+            return result;
         }
 
         private static bool IsLabelMatch(string actual, string predicted)

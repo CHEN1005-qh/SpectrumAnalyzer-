@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Linq;
 
-namespace SpectrumAnalyzer
+namespace SpectrumAnalyzer.Core
 {
     // 对应 RamanSpectrum 表 (实测库)
     public class RamanSpectrumModel
@@ -79,13 +79,6 @@ namespace SpectrumAnalyzer
     {
         public string Name { get; set; }        // 物质名称
         public string Formula { get; set; }     // 化学式
-
-        // 保留 Score 字段作为兼容层
-        public double Score
-        {
-            get => CombinedScore;
-            set { }
-        }
 
         public double PeakScore { get; set; }   // 特征峰匹配得分 (0-100)
         public double HqiScore { get; set; }    // 全谱匹配得分 (0-100)

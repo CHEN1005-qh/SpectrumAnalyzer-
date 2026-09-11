@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Input;
 using SpectrumAnalyzer.Services;
+using SpectrumAnalyzer.Core;
+using SpectrumAnalyzer.Data;
 
 namespace SpectrumAnalyzer.ViewModels
 {
@@ -16,9 +18,6 @@ namespace SpectrumAnalyzer.ViewModels
         private readonly SpectrumProcessingService _processingService;
         private readonly SpectrumMatchingService _matchingService;
         private readonly DatabaseService _databaseService;
-
-        // 匹配命令
-        private RelayCommand _matchCommand;
 
         // 数据属性
         private string _currentSubstanceName = "未知物质";
@@ -57,6 +56,24 @@ namespace SpectrumAnalyzer.ViewModels
         {
             get => _currentSubstanceName;
             set => SetProperty(ref _currentSubstanceName, value);
+        }
+
+        /// <summary>
+        /// 最近一次 KNN 分类判定的物质名称（用于 UI 展示）
+        /// </summary>
+        public string ClassificationResult
+        {
+            get => _classificationResult;
+            set => SetProperty(ref _classificationResult, value);
+        }
+
+        /// <summary>
+        /// 最近一次 KNN 分类的置信度 (0-1)
+        /// </summary>
+        public double ClassificationConfidence
+        {
+            get => _classificationConfidence;
+            set => SetProperty(ref _classificationConfidence, value);
         }
 
         /// <summary>
@@ -507,12 +524,12 @@ namespace SpectrumAnalyzer.ViewModels
                 {
                     try
                     {
-                        var refPeaks = ParseReferencePeaks(refEntry?.PeaksJson);
-                        var sim = CalculateSimilarity(samplePeaks, refPeaks, 8.0);
+                        var refPeaks = PreprocessingService.ParseReferencePeaks(refEntry?.PeaksJson);
+                        var sim = PreprocessingService.CalculateSimilarity(samplePeaks, refPeaks, 8.0);
 
                         var refX = TryReadSpectrumArray(refEntry?.X_cm);
                         var refY = TryReadSpectrumArray(refEntry?.Y_cm);
-                        var hqi = CalculateHQI(sampleX, sampleY, refX, refY);
+                        var hqi = PreprocessingService.CalculateHQI(sampleX, sampleY, refX, refY);
 
                         results.Add(new MatchResult
                         {
@@ -531,8 +548,9 @@ namespace SpectrumAnalyzer.ViewModels
                     }
                 }
 
+                // 排序与界面显示的 CombinedScore（等权平均）保持一致，避免两处“综合分”打架
                 var ordered = results
-                    .OrderByDescending(r => (r.PeakScore * 0.6) + (r.HqiScore * 0.4))
+                    .OrderByDescending(r => r.CombinedScore)
                     .ToList();
 
                 PreprocessStatus = $"比对完成: 比较了 {ordered.Count} 条标准库记录";
@@ -559,166 +577,9 @@ namespace SpectrumAnalyzer.ViewModels
             }
         }
 
-        private class RefPeak
-        {
-            public double W { get; set; }
-            public double I { get; set; }
-        }
+        
 
-        private System.Collections.Generic.List<RefPeak> ParseReferencePeaks(string peaksJson)
-        {
-            var peaks = new System.Collections.Generic.List<RefPeak>();
-            if (string.IsNullOrWhiteSpace(peaksJson))
-                return peaks;
-
-            try
-            {
-                var token = Newtonsoft.Json.Linq.JToken.Parse(peaksJson);
-                if (token.Type != Newtonsoft.Json.Linq.JTokenType.Array)
-                    return peaks;
-
-                foreach (var item in token)
-                {
-                    if (item.Type == Newtonsoft.Json.Linq.JTokenType.Integer || item.Type == Newtonsoft.Json.Linq.JTokenType.Float)
-                    {
-                        peaks.Add(new RefPeak
-                        {
-                            W = item.ToObject<double>(),
-                            I = 1.0
-                        });
-                    }
-                    else if (item.Type == Newtonsoft.Json.Linq.JTokenType.Object)
-                    {
-                        var wToken = item["W"] ?? item["w"];
-                        var iToken = item["I"] ?? item["i"];
-                        if (wToken == null)
-                            continue;
-
-                        peaks.Add(new RefPeak
-                        {
-                            W = wToken.ToObject<double>(),
-                            I = iToken != null ? iToken.ToObject<double>() : 1.0
-                        });
-                    }
-                }
-            }
-            catch
-            {
-            }
-
-            return peaks;
-        }
-
-        private (double Score, int HitCount) CalculateSimilarity(System.Collections.Generic.List<PeakInfo> samplePeaks, System.Collections.Generic.List<RefPeak> refPeaks, double toleranceCm1)
-        {
-            if (samplePeaks == null || refPeaks == null || samplePeaks.Count == 0 || refPeaks.Count == 0)
-                return (0.0, 0);
-
-            var sample = new System.Collections.Generic.List<(double W, double I)>();
-            foreach (var p in samplePeaks)
-            {
-                sample.Add((GetPeakWavenumber(p), GetPeakIntensity(p)));
-            }
-
-            double totalWeight = refPeaks.Sum(p => Math.Max(Math.Abs(p.I), 1.0));
-            if (totalWeight <= 0)
-                return (0.0, 0);
-
-            int hitCount = 0;
-            double weightedHit = 0.0;
-            var used = new bool[sample.Count];
-
-            foreach (var rp in refPeaks)
-            {
-                var bestIdx = -1;
-                var bestDelta = double.MaxValue;
-
-                for (int i = 0; i < sample.Count; i++)
-                {
-                    if (used[i])
-                        continue;
-
-                    var delta = Math.Abs(sample[i].W - rp.W);
-                    if (delta <= toleranceCm1 && delta < bestDelta)
-                    {
-                        bestDelta = delta;
-                        bestIdx = i;
-                    }
-                }
-
-                if (bestIdx >= 0)
-                {
-                    used[bestIdx] = true;
-                    hitCount++;
-                    var closeness = Math.Max(0.0, 1.0 - (bestDelta / toleranceCm1));
-                    weightedHit += Math.Max(Math.Abs(rp.I), 1.0) * closeness;
-                }
-            }
-
-            var score = (weightedHit / totalWeight) * 100.0;
-            return (Math.Round(score, 1), hitCount);
-        }
-
-        private double CalculateHQI(double[] sampleX, double[] sampleY, double[] refX, double[] refY)
-        {
-            if (sampleX == null || sampleY == null || refX == null || refY == null)
-                return 0.0;
-            if (sampleX.Length < 3 || sampleY.Length < 3 || refX.Length < 3 || refY.Length < 3)
-                return 0.0;
-
-            int n = Math.Min(sampleX.Length, sampleY.Length);
-            if (n < 3)
-                return 0.0;
-
-            double dot = 0.0;
-            double normA = 0.0;
-            double normB = 0.0;
-
-            for (int i = 0; i < n; i++)
-            {
-                var a = sampleY[i];
-                var b = Interpolate(refX, refY, sampleX[i]);
-                dot += a * b;
-                normA += a * a;
-                normB += b * b;
-            }
-
-            if (normA <= 0 || normB <= 0)
-                return 0.0;
-
-            var cos = dot / (Math.Sqrt(normA) * Math.Sqrt(normB));
-            cos = Math.Max(0.0, Math.Min(1.0, cos));
-            return Math.Round(cos * 100.0, 1);
-        }
-
-        private double Interpolate(double[] x, double[] y, double qx)
-        {
-            int n = Math.Min(x.Length, y.Length);
-            if (n == 0)
-                return 0.0;
-            if (qx <= x[0])
-                return y[0];
-            if (qx >= x[n - 1])
-                return y[n - 1];
-
-            int lo = 0;
-            int hi = n - 1;
-            while (hi - lo > 1)
-            {
-                int mid = (lo + hi) / 2;
-                if (x[mid] <= qx)
-                    lo = mid;
-                else
-                    hi = mid;
-            }
-
-            double x0 = x[lo], x1 = x[hi];
-            double y0 = y[lo], y1 = y[hi];
-            if (Math.Abs(x1 - x0) < 1e-12)
-                return y0;
-            double t = (qx - x0) / (x1 - x0);
-            return y0 + (y1 - y0) * t;
-        }
+        
 
         private double[] TryReadSpectrumArray(object raw)
         {
@@ -745,44 +606,6 @@ namespace SpectrumAnalyzer.ViewModels
             }
 
             return null;
-        }
-
-        private double GetPeakWavenumber(PeakInfo peak)
-        {
-            return ReadPropertyAsDouble(peak, "Wavenumber", "Position", "X", "W", "Center");
-        }
-
-        private double GetPeakIntensity(PeakInfo peak)
-        {
-            var val = ReadPropertyAsDouble(peak, "Intensity", "Height", "Y", "I", "Amplitude");
-            return val <= 0 ? 1.0 : val;
-        }
-
-        private double ReadPropertyAsDouble(object obj, params string[] names)
-        {
-            if (obj == null || names == null)
-                return 0.0;
-
-            var type = obj.GetType();
-            foreach (var name in names)
-            {
-                var p = type.GetProperty(name);
-                if (p == null)
-                    continue;
-                var value = p.GetValue(obj);
-                if (value == null)
-                    continue;
-
-                try
-                {
-                    return Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture);
-                }
-                catch
-                {
-                }
-            }
-
-            return 0.0;
         }
 
         #endregion
@@ -848,18 +671,48 @@ namespace SpectrumAnalyzer.ViewModels
         }
 
         /// <summary>
-        /// 执行分类（KNN匹配）
+        /// 执行分类（SNV+PCA+KNN 匹配）：将当前已处理光谱与标准库比对，
+        /// 判定结果写入 ClassificationResult / ClassificationConfidence
         /// </summary>
         private void ExecuteClassify()
         {
             try
             {
-                PreprocessStatus = "正在执行分类...";
-                // TODO: 集成 KnnClassifier 的分类逻辑
-                PreprocessStatus = "分类完成";
+                var x = CurrentXProcessed;
+                var y = CurrentYProcessed;
+                if (x == null || y == null || x.Length == 0 || y.Length == 0)
+                {
+                    ClassificationResult = string.Empty;
+                    ClassificationConfidence = 0.0;
+                    PreprocessStatus = "错误：当前无已处理光谱可用于分类，请先加载并预处理光谱";
+                    return;
+                }
+
+                var library = _databaseService.GetReferenceLibrary();
+                if (library == null || library.Count == 0)
+                {
+                    ClassificationResult = string.Empty;
+                    ClassificationConfidence = 0.0;
+                    PreprocessStatus = "分类失败：标准库为空，请先导入标准参考光谱";
+                    return;
+                }
+
+                PreprocessStatus = "正在执行算法分类 (SNV + PCA + KNN)...";
+
+                // 使用静态 Predict：将标准谱重采样对齐到当前光谱坐标轴后训练并预测，规避长度不一致
+                var result = KnnClassifier.Predict(x, y, library, k: 3);
+
+                ClassificationResult = result?.PredictedClass ?? string.Empty;
+                ClassificationConfidence = result?.Confidence ?? 0.0;
+                CurrentSubstanceName = string.IsNullOrEmpty(ClassificationResult)
+                    ? "未知物质"
+                    : ClassificationResult;
+                PreprocessStatus = $"算法分类完成: {(string.IsNullOrEmpty(ClassificationResult) ? "未知物质" : ClassificationResult)} (置信度 {ClassificationConfidence:P})";
             }
             catch (Exception ex)
             {
+                ClassificationResult = string.Empty;
+                ClassificationConfidence = 0.0;
                 PreprocessStatus = $"分类失败: {ex.Message}";
                 System.Diagnostics.Debug.WriteLine(ex);
             }

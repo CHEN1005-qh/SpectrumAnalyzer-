@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using SpectrumAnalyzer.Core;
+using SpectrumAnalyzer.Data;
 
 namespace SpectrumAnalyzer.Services
 {

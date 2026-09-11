@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.SQLite;
 using System.Linq;
-using SpectrumAnalyzer;
+using SpectrumAnalyzer.Core;
 
-namespace SpectrumAnalyzer
+namespace SpectrumAnalyzer.Data
 {
     public class DatabaseService
     {

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SpectrumAnalyzer;
+using SpectrumAnalyzer.Core;
 
-namespace SpectrumAnalyzer.Repositories
+namespace SpectrumAnalyzer.Data.Repositories
 {
     /// <summary>
     /// 实测拉曼光谱仓储实现
