@@ -59,7 +59,70 @@ namespace SpectrumAnalyzer.ViewModels
             set => SetProperty(ref _currentSubstanceName, value);
         }
 
+        /// <summary>
+        /// 将标准库中存储的 JSON 字符串解析为 double[]（支持数组或以逗号分隔的数字字符串）
+        /// </summary>
+        private double[] ParseJsonToDoubleArray(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
 
+            try
+            {
+                // 先尝试直接解析为 JArray
+                var token = Newtonsoft.Json.Linq.JToken.Parse(json);
+                if (token.Type == Newtonsoft.Json.Linq.JTokenType.Array)
+                {
+                    var list = new System.Collections.Generic.List<double>();
+                    foreach (var item in token)
+                    {
+                        if (item.Type == Newtonsoft.Json.Linq.JTokenType.Float || item.Type == Newtonsoft.Json.Linq.JTokenType.Integer)
+                        {
+                            list.Add(item.ToObject<double>());
+                        }
+                        else if (item.Type == Newtonsoft.Json.Linq.JTokenType.Object)
+                        {
+                            // 支持 {"W":123,"I":1} 这类对象数组，只取 W
+                            var w = item["W"] ?? item["w"];
+                            if (w != null)
+                                list.Add(w.ToObject<double>());
+                        }
+                    }
+
+                    return list.ToArray();
+                }
+            }
+            catch
+            {
+                // 忽略并尝试其它解析方式
+            }
+
+            // 备用：尝试按逗号/空格分割的纯数字列表
+            try
+            {
+                var parts = json.Split(new char[] { ',', ';', ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                var list = new System.Collections.Generic.List<double>();
+                foreach (var p in parts)
+                {
+                    if (double.TryParse(p, out double v))
+                        list.Add(v);
+                }
+
+                return list.Count > 0 ? list.ToArray() : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 公共方法：从数据库重新加载列表（供 UI 层调用以实现实时刷新）
+        /// </summary>
+        public void ReloadDataList()
+        {
+            RefreshDataList();
+        }
 
         /// <summary>
         /// 预处理状态文本
@@ -137,7 +200,46 @@ namespace SpectrumAnalyzer.ViewModels
         public ReferenceSpectrumModel SelectedReferenceSpectrum
         {
             get => _selectedReferenceSpectrum;
-            set => SetProperty(ref _selectedReferenceSpectrum, value);
+            set
+            {
+                if (!SetProperty(ref _selectedReferenceSpectrum, value))
+                    return;
+
+                // 当在参考谱列表切换时，自动将选中参考谱加载到处理服务并触发预处理与 UI 刷新
+                try
+                {
+                    if (_selectedReferenceSpectrum != null && !IsRamanMode)
+                    {
+                        // 解析参考谱中的 X_cm/Y_cm（JSON 格式）并加载为原始数据
+                        var x = ParseJsonToDoubleArray(_selectedReferenceSpectrum.X_cm);
+                        var y = ParseJsonToDoubleArray(_selectedReferenceSpectrum.Y_cm);
+
+                        if (x != null && y != null && x.Length == y.Length && x.Length > 0)
+                        {
+                            _processingService.LoadRawData(x, y);
+
+                            // 尝试使用当前算法配置进行预处理，更新缓存并通知 UI
+                            if (CurrentConfig == null)
+                                CurrentConfig = new AlgorithmConfig();
+
+                            var res = _processingService.PreprocessData(CurrentConfig);
+                            PreprocessStatus = res.Success ? res.Message : ("参考谱处理失败: " + res.Message);
+
+                            // 通知依赖的绑定属性更新绘图
+                            OnPropertyChanged(nameof(CurrentX));
+                            OnPropertyChanged(nameof(CurrentYRaw));
+                            OnPropertyChanged(nameof(CurrentXProcessed));
+                            OnPropertyChanged(nameof(CurrentYProcessed));
+                            OnPropertyChanged(nameof(CurrentPeaks));
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    PreprocessStatus = "加载参考谱失败: " + ex.Message;
+                    System.Diagnostics.Debug.WriteLine(ex);
+                }
+            }
         }
 
         /// <summary>
@@ -357,6 +459,27 @@ namespace SpectrumAnalyzer.ViewModels
 
             // 加载数据
             RefreshDataList();
+
+            // 订阅数据库变更通知，以便在外部删除/导入/更新后实时刷新列表
+            try
+            {
+                DatabaseService.DataChanged += () =>
+                {
+                    // 在 UI 线程刷新
+                    try
+                    {
+                        System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() => RefreshDataList()));
+                    }
+                    catch
+                    {
+                        // 回退：直接调用
+                        RefreshDataList();
+                    }
+                };
+            }
+            catch
+            {
+            }
         }
 
         /// <summary>
@@ -795,6 +918,9 @@ namespace SpectrumAnalyzer.ViewModels
                 {
                     _databaseService.UpdateReference(SelectedReferenceSpectrum);
                     PreprocessStatus = "标准光谱已保存";
+
+                    // 同步刷新列表，确保 UI 中的参考库与数据库一致
+                    RefreshDataList();
                 }
             }
             catch (Exception ex)
@@ -823,59 +949,6 @@ namespace SpectrumAnalyzer.ViewModels
         }
 
         #endregion
-
-        /// <summary>
-        /// 批量删除已勾选的光谱（根据当前视图）
-        /// </summary>
-        public void DeleteCheckedSpectra()
-        {
-            try
-            {
-                if (IsRamanMode)
-                {
-                    var toDelete = _ramanSpectraList?.Where(r => r.IsChecked).ToList();
-                    if (toDelete == null || toDelete.Count == 0) { PreprocessStatus = "未选中要删除的实测光谱"; return; }
-                    foreach (var r in toDelete)
-                    {
-                        _databaseService.DeleteSubstance(r.Id, "RamanSpectrum");
-                        _ramanSpectraList.Remove(r);
-                    }
-                    PreprocessStatus = $"已删除 {toDelete.Count} 条实测光谱";
-                }
-                else
-                {
-                    var toDelete = _referenceSpectraList?.Where(r => r.IsChecked).ToList();
-                    if (toDelete == null || toDelete.Count == 0) { PreprocessStatus = "未选中要删除的参考光谱"; return; }
-                    foreach (var r in toDelete)
-                    {
-                        _databaseService.DeleteSubstance(r.Id, "ReferenceSpectrum");
-                        _referenceSpectraList.Remove(r);
-                    }
-                    PreprocessStatus = $"已删除 {toDelete.Count} 条参考光谱";
-                }
-            }
-            catch (Exception ex)
-            {
-                PreprocessStatus = $"批量删除失败: {ex.Message}";
-                System.Diagnostics.Debug.WriteLine(ex);
-            }
-        }
-
-        /// <summary>
-        /// 获取已勾选的实测光谱副本（用于导出）
-        /// </summary>
-        public System.Collections.Generic.List<RamanSpectrumModel> GetCheckedRaman()
-        {
-            return _ramanSpectraList?.Where(r => r.IsChecked).ToList() ?? new System.Collections.Generic.List<RamanSpectrumModel>();
-        }
-
-        /// <summary>
-        /// 获取已勾选的参考光谱副本（用于导出）
-        /// </summary>
-        public System.Collections.Generic.List<ReferenceSpectrumModel> GetCheckedReference()
-        {
-            return _referenceSpectraList?.Where(r => r.IsChecked).ToList() ?? new System.Collections.Generic.List<ReferenceSpectrumModel>();
-        }
 
         #region 辅助方法
 

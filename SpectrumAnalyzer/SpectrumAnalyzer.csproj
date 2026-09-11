@@ -142,18 +142,9 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
-    <Compile Include="AlgorithmConfig.cs" />
-    <Compile Include="DatabaseService.cs" />
-    <Compile Include="KnnClassifier.cs" />
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
     </Compile>
-    <Compile Include="PreprocessingService.cs" />
-    <Compile Include="Repositories\ISpectrumRepository.cs" />
-    <Compile Include="Repositories\SpectrumRepository.cs" />
-    <Compile Include="Services\SpectrumMatchingService.cs" />
-    <Compile Include="Services\SpectrumProcessingService.cs" />
-    <Compile Include="SubstanceModel.cs" />
     <Compile Include="SaveWindow.xaml.cs">
       <DependentUpon>SaveWindow.xaml</DependentUpon>
     </Compile>
@@ -227,7 +218,20 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <ProjectReference Include="..\SpectrumAnalyzer.Core\SpectrumAnalyzer.Core.csproj">
+      <Project>{a32d2f41-44b5-4e69-861a-28afc42532b5}</Project>
+      <Name>SpectrumAnalyzer.Core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\SpectrumAnalyzer.Data\SpectrumAnalyzer.Data.csproj">
+      <Project>{41ed50e2-9d2d-4fb4-801b-80f130a00784}</Project>
+      <Name>SpectrumAnalyzer.Data</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\SpectrumAnalyzer.Services\SpectrumAnalyzer.Services.csproj">
+      <Project>{43078a77-4c95-4562-99db-fc0834ceb37e}</Project>
+      <Name>SpectrumAnalyzer.Services</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>

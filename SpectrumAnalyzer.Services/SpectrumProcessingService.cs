@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 
 namespace SpectrumAnalyzer.Services
@@ -12,6 +14,8 @@ namespace SpectrumAnalyzer.Services
     public class SpectrumProcessingService
     {
         private readonly DatabaseService _databaseService;
+        // 限制并发处理数量，避免同时运行过多耗时任务导致内存/CPU 激增
+        private static readonly SemaphoreSlim _processingSemaphore = new SemaphoreSlim(Math.Max(1, Environment.ProcessorCount));
 
         // 当前处理状态缓存
         private double[] _currentX;
@@ -59,78 +63,124 @@ namespace SpectrumAnalyzer.Services
         }
 
         /// <summary>
-        /// 执行数据预处理流程
+        /// 同步入口：保留原始同步签名，内部委托到异步版本（会阻塞当前线程）
         /// </summary>
         public ProcessingResult PreprocessData(AlgorithmConfig config)
         {
-            var result = new ProcessingResult();
-
-            try
-            {
-                if (_currentX == null || _currentYRaw == null)
-                {
-                    result.Success = false;
-                    result.Message = "未加载任何光谱数据";
-                    return result;
-                }
-
-                // 克隆原始数据以避免污染
-                double[] activeX = (double[])_currentX.Clone();
-                double[] activeYRaw = (double[])_currentYRaw.Clone();
-
-                // 1. 执行低频区间裁剪
-                if (config.CropBelow200)
-                {
-                    var cropped = ApplyLowFrequencyCutoff(activeX, activeYRaw, 200.0);
-                    activeX = cropped.croppedX;
-                    activeYRaw = cropped.croppedY;
-                }
-
-                // 2. 预处理数据（去毛刺、平滑、基线校正、归一化）
-                double[] processedY = ProcessDataInternal(activeYRaw, config);
-
-                // 3. 峰值检测
-                var peaks = PreprocessingService.FindPeaksAdvanced(activeX, processedY, config);
-
-                // 保存结果到缓存
-                _currentXProcessed = activeX;
-                _currentYProcessed = processedY;
-                _currentPeaks = peaks;
-
-                result.Success = true;
-                result.ProcessedX = activeX;
-                result.ProcessedY = processedY;
-                result.Peaks = peaks;
-                result.Message = $"处理完成，检测到 {peaks.Count} 个特征峰";
-            }
-            catch (Exception ex)
-            {
-                result.Success = false;
-                result.Message = $"预处理失败: {ex.Message}";
-                System.Diagnostics.Debug.WriteLine(ex);
-            }
-
-            return result;
+            return PreprocessDataAsync(config, CancellationToken.None).GetAwaiter().GetResult();
         }
 
         /// <summary>
-        /// 内部预处理方法：执行去毛刺、平滑、基线校正、归一化
+        /// 异步执行数据预处理流程，支持取消与并发限制
+        /// </summary>
+        public async Task<ProcessingResult> PreprocessDataAsync(AlgorithmConfig config, CancellationToken cancellationToken)
+        {
+            await _processingSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var result = new ProcessingResult();
+
+                try
+                {
+                    if (_currentX == null || _currentYRaw == null)
+                    {
+                        result.Success = false;
+                        result.Message = "未加载任何光谱数据";
+                        return result;
+                    }
+
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    // 克隆原始数据以避免污染
+                    double[] activeX = (double[])_currentX.Clone();
+                    double[] activeYRaw = (double[])_currentYRaw.Clone();
+
+                    // 1. 执行低频区间裁剪
+                    if (config.CropBelow200)
+                    {
+                        var cropped = ApplyLowFrequencyCutoff(activeX, activeYRaw, 200.0);
+                        activeX = cropped.croppedX;
+                        activeYRaw = cropped.croppedY;
+                    }
+
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    // 2. 预处理数据（去毛刺、平滑、基线校正、归一化）
+                    double[] processedY = await Task.Run(() => ProcessDataInternal(activeYRaw, config, cancellationToken), cancellationToken).ConfigureAwait(false);
+
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    // 3. 峰值检测
+                    var peaks = PreprocessingService.FindPeaksAdvanced(activeX, processedY, config);
+
+                    // 保存结果到缓存
+                    _currentXProcessed = activeX;
+                    _currentYProcessed = processedY;
+                    _currentPeaks = peaks;
+
+                    result.Success = true;
+                    result.ProcessedX = activeX;
+                    result.ProcessedY = processedY;
+                    result.Peaks = peaks;
+                    result.Message = $"处理完成，检测到 {peaks.Count} 个特征峰";
+                }
+                catch (OperationCanceledException)
+                {
+                    result.Success = false;
+                    result.Message = "预处理已取消";
+                }
+                catch (Exception ex)
+                {
+                    result.Success = false;
+                    result.Message = $"预处理失败: {ex.Message}";
+                    System.Diagnostics.Debug.WriteLine(ex);
+                }
+
+                return result;
+            }
+            finally
+            {
+                _processingSemaphore.Release();
+            }
+        }
+
+        /// <summary>
+        /// 兼容方法：保留无 CancellationToken 的签名，内部委托到可取消版本
         /// </summary>
         private double[] ProcessDataInternal(double[] rawY, AlgorithmConfig activeConfig)
         {
-            double[] y = (double[])rawY.Clone();
+            return ProcessDataInternal(rawY, activeConfig, CancellationToken.None);
+        }
+
+        /// <summary>
+        /// 内部预处理方法（支持取消）：执行去毛刺、平滑、基线校正、归一化
+        /// </summary>
+        private double[] ProcessDataInternal(double[] rawY, AlgorithmConfig activeConfig, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // rawY is already a cloned buffer by the caller (PreprocessData),
+            // perform in-place processing to avoid extra array allocations.
+            double[] y = rawY;
 
             // 1. 去毛刺 (宇宙射线/毛刺)
             if (activeConfig.EnableDespike)
+            {
+                ct.ThrowIfCancellationRequested();
                 y = PreprocessingService.RemoveSpikes(y, activeConfig.DespikeWindow, activeConfig.DespikeZ);
+            }
 
             // 2. SG 平滑
             if (activeConfig.EnableSmoothing)
+            {
+                ct.ThrowIfCancellationRequested();
                 y = PreprocessingService.SavitzkyGolaySmooth(y, activeConfig.SgWindowSize, activeConfig.SgOrder);
+            }
 
             // 3. 基线扣除
             if (activeConfig.EnableBaseline)
             {
+                ct.ThrowIfCancellationRequested();
                 double[] baseline;
 
                 // 分支选择基线算法
@@ -146,13 +196,23 @@ namespace SpectrumAnalyzer.Services
                     baseline = PreprocessingService.SavitzkyGolaySmooth(baseline, activeConfig.BaselineSmoothWindow, activeConfig.SgOrder);
                 }
 
-                // 基线消除
-                y = y.Select((v, i) => Math.Max(0, v - baseline[i])).ToArray();
+                // 基线消除 —— 原地计算以避免产生临时数组，降低 GC 压力
+                for (int i = 0; i < y.Length; i++)
+                {
+                    if ((i & 0x3FF) == 0) // 每1024次检查一次取消请求，降低检查开销
+                        ct.ThrowIfCancellationRequested();
+
+                    double diff = y[i] - baseline[i];
+                    y[i] = diff > 0.0 ? diff : 0.0;
+                }
             }
 
             // 4. 归一化 (0.0 - 1.0)
             if (activeConfig.EnableNormalization)
+            {
+                ct.ThrowIfCancellationRequested();
                 y = PreprocessingService.Normalize(y);
+            }
 
             return y;
         }

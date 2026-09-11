@@ -6,4 +6,8 @@
   <Project Path="SpectrumAnalyzer/SpectrumAnalyzer.csproj" Id="43590436-a73e-4d83-a4f1-8d98be0b1059">
     <Platform Solution="*|x86" Project="x86" />
   </Project>
+  <Project Path="SpectrumAnalyzer.Core/SpectrumAnalyzer.Core.csproj" Id="a32d2f41-44b5-4e69-861a-28afc42532b5" />
+  <Project Path="SpectrumAnalyzer.Data/SpectrumAnalyzer.Data.csproj" Id="41ed50e2-9d2d-4fb4-801b-80f130a00784" />
+  <Project Path="SpectrumAnalyzer.Services/SpectrumAnalyzer.Services.csproj" Id="43078a77-4c95-4562-99db-fc0834ceb37e" />
+  <Project Path="SpectrumAnalyzer.Tests/SpectrumAnalyzer.Tests.csproj" Id="b83ebb99-fb6d-4079-851a-2121ed958e9a" />
 </Solution>

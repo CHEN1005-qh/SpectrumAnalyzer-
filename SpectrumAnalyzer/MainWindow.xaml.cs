@@ -46,6 +46,8 @@ namespace SpectrumAnalyzer
 
         // 记录当前叠加的参考峰 plottable 以便清理
         private readonly System.Collections.Generic.List<ScottPlot.Plottable.IPlottable> _refPlottables = new System.Collections.Generic.List<ScottPlot.Plottable.IPlottable>();
+        // 记录当前多谱叠加用的 plottable 以便清理
+        private readonly System.Collections.Generic.List<ScottPlot.Plottable.IPlottable> _overlayPlottables = new System.Collections.Generic.List<ScottPlot.Plottable.IPlottable>();
 
         public MainWindow()
         {
@@ -66,31 +68,9 @@ namespace SpectrumAnalyzer
         }
 
         /// <summary>
-        /// 批量删除（根据勾选）
+        /// 全选头部复选框 - 选中
         /// </summary>
-        private void BtnBulkDelete_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                if (_viewModel == null) return;
-
-                // 确认
-                if (MessageBox.Show("确定要删除所有勾选的光谱吗？此操作不可撤销。", "确认批量删除", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
-                    return;
-
-                _viewModel.DeleteCheckedSpectra();
-                RefreshMainList();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"批量删除失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        /// <summary>
-        /// 批量导出（导出勾选条目为 JSON）
-        /// </summary>
-        private void BtnBulkExport_Click(object sender, RoutedEventArgs e)
+        private void HeaderCheckBox_Checked(object sender, System.Windows.RoutedEventArgs e)
         {
             try
             {
@@ -98,66 +78,51 @@ namespace SpectrumAnalyzer
 
                 if (RbExperimental.IsChecked == true)
                 {
-                    var list = _viewModel.GetCheckedRaman();
-                    if (list == null || list.Count == 0)
+                    if (_viewModel.RamanSpectraList != null)
                     {
-                        MessageBox.Show("未选中任何实测光谱用于导出。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                        return;
-                    }
-
-                    var exportList = new System.Collections.Generic.List<object>();
-                    foreach (var r in list)
-                    {
-                        double[] x = SpectrumProcessingService.DeserializeSpectrumData(r.X_cm);
-                        double[] y = SpectrumProcessingService.DeserializeSpectrumData(r.Y_cm);
-                        exportList.Add(new
-                        {
-                            r.Id,
-                            r.Name,
-                            r.NameAuto,
-                            r.AcquiredAt,
-                            r.Points,
-                            X = x,
-                            Y = y,
-                            r.Note,
-                            r.IntegrationTime,
-                            r.Grating,
-                            r.LaserPower,
-                            r.ExcitationWavelength,
-                            r.ProcessMethod
-                        });
-                    }
-
-                    var save = new SaveFileDialog { DefaultExt = ".json", Filter = "JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*", FileName = "raman_selected.json" };
-                    if (save.ShowDialog() == true)
-                    {
-                        var json = Newtonsoft.Json.JsonConvert.SerializeObject(exportList, Newtonsoft.Json.Formatting.Indented);
-                        System.IO.File.WriteAllText(save.FileName, json, System.Text.Encoding.UTF8);
-                        MessageBox.Show("已导出选中实测光谱。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
+                        foreach (var it in _viewModel.RamanSpectraList) it.IsChecked = true;
                     }
                 }
                 else
                 {
-                    var list = _viewModel.GetCheckedReference();
-                    if (list == null || list.Count == 0)
+                    if (_viewModel.ReferenceSpectraList != null)
                     {
-                        MessageBox.Show("未选中任何参考光谱用于导出。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                        return;
-                    }
-
-                    var save = new SaveFileDialog { DefaultExt = ".json", Filter = "JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*", FileName = "reference_selected.json" };
-                    if (save.ShowDialog() == true)
-                    {
-                        var json = Newtonsoft.Json.JsonConvert.SerializeObject(list, Newtonsoft.Json.Formatting.Indented);
-                        System.IO.File.WriteAllText(save.FileName, json, System.Text.Encoding.UTF8);
-                        MessageBox.Show("已导出选中参考光谱。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
+                        foreach (var it in _viewModel.ReferenceSpectraList) it.IsChecked = true;
                     }
                 }
+
+                DgMain.Items.Refresh();
             }
-            catch (Exception ex)
+            catch { }
+        }
+
+        /// <summary>
+        /// 全选头部复选框 - 取消选中
+        /// </summary>
+        private void HeaderCheckBox_Unchecked(object sender, System.Windows.RoutedEventArgs e)
+        {
+            try
             {
-                MessageBox.Show($"批量导出失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                if (_viewModel == null) return;
+
+                if (RbExperimental.IsChecked == true)
+                {
+                    if (_viewModel.RamanSpectraList != null)
+                    {
+                        foreach (var it in _viewModel.RamanSpectraList) it.IsChecked = false;
+                    }
+                }
+                else
+                {
+                    if (_viewModel.ReferenceSpectraList != null)
+                    {
+                        foreach (var it in _viewModel.ReferenceSpectraList) it.IsChecked = false;
+                    }
+                }
+
+                DgMain.Items.Refresh();
             }
+            catch { }
         }
 
         private void BtnOpen_Click(object sender, RoutedEventArgs e)
@@ -165,66 +130,128 @@ namespace SpectrumAnalyzer
             var dlg = new Microsoft.Win32.OpenFileDialog()
             {
                 Filter = "CSV 或 文本文件 (*.csv;*.txt)|*.csv;*.txt|所有文件 (*.*)|*.*",
-                Multiselect = false
+                Multiselect = true
             };
 
             bool? ok = dlg.ShowDialog(this);
             if (ok == true)
             {
-                try
+                int total = dlg.FileNames.Length;
+                int successCount = 0;
+                var db = new DatabaseService();
+
+                foreach (var file in dlg.FileNames)
                 {
-                    bool success = _viewModel.ImportSpectrumFromFile(dlg.FileName);
-                    if (!success)
-                    {
-                        MessageBox.Show("导入失败：无法解析所选文件，请确认文件格式为两列 (X,Y) 或单列 Y。", "导入失败", MessageBoxButton.OK, MessageBoxImage.Warning);
-                        return;
-                    }
-
-                    // 导入成功后显示状态并触发绘图刷新（用户可随后点击预处理）
-                    TxtFileInfo.Text = dlg.FileName;
-                    TxtPreprocessStatus.Text = _viewModel.PreprocessStatus;
-                    RefreshPlot();
-
-                    // 自动保存到实测光谱库（RamanSpectrum）
                     try
                     {
-                        var px = _viewModel.CurrentX;
-                        var py = _viewModel.CurrentYRaw;
-                        if (py != null && py.Length > 0)
+                        bool success = _viewModel.ImportSpectrumFromFile(file);
+                        if (!success)
                         {
-                            var model = new RamanSpectrumModel();
-                            model.Name = _viewModel.CurrentSubstanceName ?? System.IO.Path.GetFileNameWithoutExtension(dlg.FileName);
-                            model.NameAuto = "";
-                            model.AcquiredAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                            model.Points = py.Length;
-
-                            // 序列化为二进制 BLOB
-                            model.X_cm = SpectrumProcessingService.SerializeSpectrumData(px ?? new double[0]);
-                            model.Y_cm = SpectrumProcessingService.SerializeSpectrumData(py);
-                            // 为兼容旧表结构，将纳米字段也写入（使用相同数据）
-                            model.X_nm = model.X_cm ?? new byte[0];
-                            model.Y_nm = model.Y_cm ?? new byte[0];
-
-                            // 其它可选字段保持默认/空
-
-                            var db = new DatabaseService();
-                            db.SaveSubstance(model, "RamanSpectrum");
-
-                            // 刷新 ViewModel 数据列表以显示新记录
-                            RefreshMainList();
-                            MessageBox.Show($"已将光谱保存到实测库：{model.Name}", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
+                            // 跳过无法解析的文件，但继续处理其它文件
+                            continue;
                         }
+
+                        // 导入成功后触发绘图刷新（仅显示最后一个导入的文件）
+                        TxtFileInfo.Text = file;
+                        TxtPreprocessStatus.Text = _viewModel.PreprocessStatus;
+                        RefreshPlot();
+
+                        // 自动保存到实测光谱库（RamanSpectrum）
+                        try
+                        {
+                            var px = _viewModel.CurrentX;
+                            var py = _viewModel.CurrentYRaw;
+                            if (py != null && py.Length > 0)
+                            {
+                                var model = new RamanSpectrumModel();
+                                model.Name = _viewModel.CurrentSubstanceName ?? System.IO.Path.GetFileNameWithoutExtension(file);
+                                model.NameAuto = "";
+                                model.AcquiredAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                                model.Points = py.Length;
+
+                                // 序列化为二进制 BLOB
+                                model.X_cm = SpectrumProcessingService.SerializeSpectrumData(px ?? new double[0]);
+                                model.Y_cm = SpectrumProcessingService.SerializeSpectrumData(py);
+                                // 为兼容旧表结构，将纳米字段也写入（使用相同数据）
+                                model.X_nm = model.X_cm ?? new byte[0];
+                                model.Y_nm = model.Y_cm ?? new byte[0];
+
+                                db.SaveSubstance(model, "RamanSpectrum");
+                                successCount++;
+                            }
+                        }
+                        catch { }
                     }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"导入后自动保存到实测库失败: {ex.Message}", "警告", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    }
+                    catch { }
                 }
-                catch (Exception ex)
+
+                // 批量完成后从数据库重新加载 ViewModel 缓存并刷新 UI 列表
+                try
                 {
-                    MessageBox.Show($"导入出错: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    _viewModel?.ReloadDataList();
+                }
+                catch { }
+                RefreshMainList();
+                TxtFileInfo.Text = $"已导入 {successCount}/{total} 个文件";
+                if (successCount == 0)
+                {
+                    MessageBox.Show("未能导入任何文件，请确认文件格式为两列 (X,Y) 或单列 Y。", "导入失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+                else
+                {
+                    MessageBox.Show($"批量导入完成：成功 {successCount}，共 {total} 个文件。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         }
 
         /// <summary>
@@ -374,15 +401,68 @@ namespace SpectrumAnalyzer
         }
 
         /// <summary>
-        /// 删除按钮 → 转发到 DeleteCommand
+        /// 删除按钮（批量删除）
+        /// 支持在实测库或参考库视图中勾选多条记录后一次性删除
         /// </summary>
         private void BtnDelete_Click(object sender, RoutedEventArgs e)
         {
-            if (MessageBox.Show("确认删除选中的光谱？", "删除确认", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+            try
             {
-                if (_viewModel?.DeleteCommand.CanExecute(null) == true)
-                    _viewModel.DeleteCommand.Execute(null);
-                RefreshMainList();
+                if (_viewModel == null)
+                {
+                    MessageBox.Show("未找到 ViewModel 实例。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                // 根据当前视图选择对应集合
+                if (RbExperimental.IsChecked == true)
+                {
+                    var toDelete = _viewModel.RamanSpectraList?.Where(x => x.IsChecked).ToList() ?? new System.Collections.Generic.List<RamanSpectrumModel>();
+                    if (toDelete.Count == 0)
+                    {
+                        MessageBox.Show("请先在列表中勾选要删除的实测光谱记录。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    if (MessageBox.Show($"确认删除选中的 {toDelete.Count} 条实测光谱？", "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                        return;
+
+                    var db = new DatabaseService();
+                    foreach (var item in toDelete)
+                    {
+                        try { db.DeleteSubstance(item.Id, "RamanSpectrum"); }
+                        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"删除实测光谱 {item.Id} 失败: {ex.Message}"); }
+                    }
+
+                    RefreshMainList();
+                    MessageBox.Show($"已删除 {toDelete.Count} 条实测光谱。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    var toDelete = _viewModel.ReferenceSpectraList?.Where(x => x.IsChecked).ToList() ?? new System.Collections.Generic.List<ReferenceSpectrumModel>();
+                    if (toDelete.Count == 0)
+                    {
+                        MessageBox.Show("请先在列表中勾选要删除的参考光谱记录。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    if (MessageBox.Show($"确认删除选中的 {toDelete.Count} 条参考光谱？", "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                        return;
+
+                    var db = new DatabaseService();
+                    foreach (var item in toDelete)
+                    {
+                        try { db.DeleteSubstance(item.Id, "ReferenceSpectrum"); }
+                        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"删除参考光谱 {item.Id} 失败: {ex.Message}"); }
+                    }
+
+                    RefreshMainList();
+                    MessageBox.Show($"已删除 {toDelete.Count} 条参考光谱。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"批量删除失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -465,20 +545,84 @@ namespace SpectrumAnalyzer
         /// </summary>
         private void DgMain_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (DgMain.SelectedItem is RamanSpectrumModel ramanSpectrum)
+            try
             {
-                _viewModel.SelectedRamanSpectrum = ramanSpectrum;
-                // 加载光谱
-                if (_viewModel?.LoadRamanDataCommand.CanExecute(null) == true)
-                    _viewModel.LoadRamanDataCommand.Execute(null);
+                // 清理旧的叠加曲线
+                if (_overlayPlottables.Count > 0)
+                {
+                    foreach (var p in _overlayPlottables)
+                    {
+                        try { MainPlot.Plot.Remove(p); } catch { }
+                    }
+                    _overlayPlottables.Clear();
+                }
 
-                RefreshPlot();
+                // 单选行为：保持原有逻辑（加载到 ViewModel 并显示）
+                if (DgMain.SelectedItems != null && DgMain.SelectedItems.Count == 1 && DgMain.SelectedItem is RamanSpectrumModel single)
+                {
+                    _viewModel.SelectedRamanSpectrum = single;
+                    if (_viewModel?.LoadRamanDataCommand.CanExecute(null) == true)
+                        _viewModel.LoadRamanDataCommand.Execute(null);
+
+                    RefreshPlot();
+                    return;
+                }
+
+                // 多选行为：将所有选中的实测光谱解包并在同一张图上叠加用于比对
+                if (DgMain.SelectedItems != null && DgMain.SelectedItems.Count > 1)
+                {
+                    int colorIdx = 0;
+                    bool anyPlotted = false;
+
+                    foreach (var obj in DgMain.SelectedItems)
+                    {
+                        if (obj is RamanSpectrumModel r)
+                        {
+                            try
+                            {
+                                var x = SpectrumProcessingService.DeserializeSpectrumData(r.X_cm);
+                                var y = SpectrumProcessingService.DeserializeSpectrumData(r.Y_cm);
+                                if (x == null || y == null || x.Length == 0 || y.Length == 0) continue;
+
+                                int n = Math.Min(x.Length, y.Length);
+                                if (n <= 0) continue;
+
+                                if (x.Length != n) { var tx = new double[n]; Array.Copy(x, tx, n); x = tx; }
+                                if (y.Length != n) { var ty = new double[n]; Array.Copy(y, ty, n); y = ty; }
+
+                                var col = OverlayColors[colorIdx % OverlayColors.Length];
+                                var pl = MainPlot.Plot.AddScatter(x, y, label: r.Name ?? $"Id:{r.Id}", color: col);
+                                pl.LineWidth = 2;
+                                _overlayPlottables.Add(pl);
+                                colorIdx++;
+                                anyPlotted = true;
+                            }
+                            catch { }
+                        }
+                    }
+
+                    if (anyPlotted)
+                    {
+                        InitCrosshairs();
+                        MainPlot.Plot.AxisAuto();
+                        var legend = MainPlot.Plot.Legend(true, Alignment.UpperRight);
+                        legend.FillColor = System.Drawing.Color.FromArgb(180, System.Drawing.Color.White);
+                        MainPlot.Plot.Title("多谱比较");
+                        MainPlot.Refresh();
+                    }
+                }
+                else if (DgMain.SelectedItem is ReferenceSpectrumModel refSpectrum)
+                {
+                    _viewModel.SelectedReferenceSpectrum = refSpectrum;
+                    // 加载参考光谱预览并在右侧绘图区显示
+                    try
+                    {
+                        ShowReferenceSpectrum(refSpectrum);
+                    }
+                    catch { }
+                }
             }
-            else if (DgMain.SelectedItem is ReferenceSpectrumModel refSpectrum)
-            {
-                _viewModel.SelectedReferenceSpectrum = refSpectrum;
-                // 可选：加载参考光谱预览
-            }
+            catch { }
         }
 
         /// <summary>
@@ -488,54 +632,50 @@ namespace SpectrumAnalyzer
         {
             try
             {
-                var selected = DgMain.SelectedItem;
-                if (selected == null) return;
-
-                if (RbExperimental.IsChecked == true && selected is RamanSpectrumModel rModel)
+                // 仅针对实测库的行双击打开详情编辑窗口
+                if (DgMain.SelectedItem is RamanSpectrumModel model)
                 {
-                    var win = new SpectrumDetailWindow(rModel) { Owner = this };
+                    var win = new SpectrumDetailWindow(model) { Owner = this };
                     bool? ok = win.ShowDialog();
                     if (ok == true)
                     {
                         try
                         {
                             var db = new DatabaseService();
-                            db.UpdateRamanSpectrum(win.Model);
+                            db.UpdateRamanSpectrum(model);
                             RefreshMainList();
                         }
                         catch (Exception ex)
                         {
-                            MessageBox.Show($"保存实测光谱失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                            MessageBox.Show($"保存实测光谱元数据失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
                         }
                     }
                 }
-                else if (RbReference.IsChecked == true && selected is ReferenceSpectrumModel refModel)
+                else if (DgMain.SelectedItem is ReferenceSpectrumModel refModel)
                 {
-                    var win = new SaveWindow(refModel) { Owner = this };
-                    bool? ok = win.ShowDialog();
-                    if (ok == true && win.ResultModel != null)
+                    try
                     {
-                        try
+                        var win = new SaveWindow(refModel) { Owner = this };
+                        bool? ok = win.ShowDialog();
+                        if (ok == true && win.ResultModel != null)
                         {
-                            var db = new DatabaseService();
-                            db.UpdateReference(win.ResultModel);
-                            RefreshMainList();
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show($"保存参考光谱失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                            try
+                            {
+                                var db = new DatabaseService();
+                                db.UpdateReference(win.ResultModel);
+                                try { _viewModel?.ReloadDataList(); } catch { }
+                                RefreshMainList();
+                            }
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show($"保存参考光谱元数据失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                            }
                         }
                     }
-                }
-                else
-                {
-                    // 其他类型或未识别：无操作
+                    catch { }
                 }
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"打开详情窗口失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            catch { }
         }
 
         /// <summary>
@@ -667,6 +807,101 @@ namespace SpectrumAnalyzer
 
         #endregion
 
+        /// <summary>
+        /// 在右侧绘图区显示选中的参考光谱
+        /// </summary>
+        private void ShowReferenceSpectrum(ReferenceSpectrumModel refModel)
+        {
+            if (refModel == null) return;
+
+            // 清理之前的参考 plottable
+            if (_refPlottables.Count > 0)
+            {
+                foreach (var p in _refPlottables)
+                {
+                    try { MainPlot.Plot.Remove(p); } catch { }
+                }
+                _refPlottables.Clear();
+            }
+
+            double[] x = null;
+            double[] y = null;
+
+            // 尝试从 ReferenceSpectrumModel 的 X_cm/Y_cm (JSON) 解析
+            try
+            {
+                if (!string.IsNullOrEmpty(refModel.X_cm))
+                {
+                    x = Newtonsoft.Json.JsonConvert.DeserializeObject<double[]>(refModel.X_cm);
+                }
+            }
+            catch { x = null; }
+
+            try
+            {
+                if (!string.IsNullOrEmpty(refModel.Y_cm))
+                {
+                    y = Newtonsoft.Json.JsonConvert.DeserializeObject<double[]>(refModel.Y_cm);
+                }
+            }
+            catch { y = null; }
+
+            // 如果解析失败但字段可能存为二进制（兼容旧结构），尝试使用 DeserializeSpectrumData
+            try
+            {
+                if ((x == null || x.Length == 0) && refModel.X_cm != null)
+                {
+                    // 尝试将 string 转为 byte[] 再反序列化（若内容为base64或直接二进制文本会失败，但保守尝试）
+                    try
+                    {
+                        var bytes = System.Text.Encoding.UTF8.GetBytes(refModel.X_cm);
+                        x = SpectrumProcessingService.DeserializeSpectrumData(bytes);
+                    }
+                    catch { }
+                }
+
+                if ((y == null || y.Length == 0) && refModel.Y_cm != null)
+                {
+                    try
+                    {
+                        var bytes = System.Text.Encoding.UTF8.GetBytes(refModel.Y_cm);
+                        y = SpectrumProcessingService.DeserializeSpectrumData(bytes);
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+
+            if (x == null || y == null || x.Length == 0 || y.Length == 0)
+            {
+                // 无法获取数据，显示提示并返回
+                TxtPreprocessStatus.Text = "未找到参考谱的全谱数据可用于预览";
+                return;
+            }
+
+            try
+            {
+                int n = Math.Min(x.Length, y.Length);
+                if (x.Length != n) { var tx = new double[n]; Array.Copy(x, tx, n); x = tx; }
+                if (y.Length != n) { var ty = new double[n]; Array.Copy(y, ty, n); y = ty; }
+
+                var pl = MainPlot.Plot.AddScatter(x, y, label: refModel.SubstanceName ?? $"Ref:{refModel.Id}", color: System.Drawing.Color.DarkGreen);
+                pl.LineWidth = 2;
+                _refPlottables.Add(pl);
+
+                InitCrosshairs();
+                MainPlot.Plot.AxisAuto();
+                MainPlot.Plot.Title($"参考谱: {refModel.SubstanceName}");
+                var legend = MainPlot.Plot.Legend(true, Alignment.UpperRight);
+                legend.FillColor = System.Drawing.Color.FromArgb(180, System.Drawing.Color.White);
+                MainPlot.Refresh();
+            }
+            catch (Exception ex)
+            {
+                TxtPreprocessStatus.Text = $"参考谱绘制失败: {ex.Message}";
+            }
+        }
+
         #region 算法参数窗口
 
         private void BtnSettings_Click(object sender, RoutedEventArgs e)
@@ -765,9 +1000,20 @@ namespace SpectrumAnalyzer
                 // 1. 添加复选框列
                 var checkColumn = new DataGridTemplateColumn
                 {
-                    Header = "选择",
                     Width = 50
                 };
+
+                // Header 全选复选框
+                var headerChk = new CheckBox
+                {
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                    ToolTip = "全选/取消全选"
+                };
+                headerChk.Checked += HeaderCheckBox_Checked;
+                headerChk.Unchecked += HeaderCheckBox_Unchecked;
+                checkColumn.Header = headerChk;
+
                 var factory = new FrameworkElementFactory(typeof(CheckBox));
                 factory.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding("IsChecked")
                 {

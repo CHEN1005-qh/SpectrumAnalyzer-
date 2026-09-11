@@ -10,6 +10,14 @@ namespace SpectrumAnalyzer
 {
     public class DatabaseService
     {
+        // 静态事件：当数据库中光谱数据发生变化（新增/更新/删除）时触发，便于 UI 实时刷新
+        public static event Action DataChanged;
+
+        private static void NotifyDataChanged()
+        {
+            try { DataChanged?.Invoke(); } catch { }
+        }
+
     // 数据库连接字符串
     private string dbPath = "Data Source=RamanLibrary.db;Version=3;";
 
@@ -120,6 +128,8 @@ namespace SpectrumAnalyzer
             if (!string.IsNullOrEmpty(sql))
             {
                 conn.Execute(sql, model);
+                // 通知订阅者数据变更
+                NotifyDataChanged();
             }
         }
     }
@@ -141,6 +151,7 @@ namespace SpectrumAnalyzer
                         Y_cm = @Y_cm
                       WHERE Id = @Id";
             conn.Execute(sql, model);
+            NotifyDataChanged();
         }
     }
 
@@ -162,6 +173,7 @@ namespace SpectrumAnalyzer
                         ProcessMethod = @ProcessMethod
                       WHERE Id = @Id";
             conn.Execute(sql, model);
+            NotifyDataChanged();
         }
     }
 
@@ -192,6 +204,9 @@ namespace SpectrumAnalyzer
             string sql = $"DELETE FROM {tableName} WHERE Id = @id";
             conn.Execute(sql, new { id });
         }
+
+        // 删除后触发通知
+        NotifyDataChanged();
     }
 
     // 导入标准光谱
@@ -216,6 +231,8 @@ namespace SpectrumAnalyzer
 
                     conn.Execute(sql, list, transaction: transaction);
                     transaction.Commit();
+                    // 导入完成后触发通知
+                    NotifyDataChanged();
                 }
                 catch (Exception ex)
                 {
