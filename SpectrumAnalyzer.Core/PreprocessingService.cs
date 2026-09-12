@@ -18,6 +18,34 @@ namespace SpectrumAnalyzer.Core
 
     public static class PreprocessingService
     {
+        /// <summary>
+        /// 低频区间裁剪：去除低于 cutoffWavenumber 的波数数据点，返回裁剪后的 X/Y
+        /// </summary>
+        public static (double[] croppedX, double[] croppedY) ApplyLowFrequencyCutoff(double[] x, double[] y, double cutoffWavenumber)
+        {
+            int startIndex = 0;
+            for (int i = 0; i < x.Length; i++)
+            {
+                if (x[i] >= cutoffWavenumber)
+                {
+                    startIndex = i;
+                    break;
+                }
+            }
+
+            if (startIndex == 0)
+                return (x, y);
+
+            int count = x.Length - startIndex;
+            double[] croppedX = new double[count];
+            double[] croppedY = new double[count];
+
+            Array.Copy(x, startIndex, croppedX, 0, count);
+            Array.Copy(y, startIndex, croppedY, 0, count);
+
+            return (croppedX, croppedY);
+        }
+
         // --- 1. 宇宙射线/毛刺去除 (Modified Z-Score Despiking) ---
         public static double[] RemoveSpikes(double[] y, int window, double zThreshold)
         {

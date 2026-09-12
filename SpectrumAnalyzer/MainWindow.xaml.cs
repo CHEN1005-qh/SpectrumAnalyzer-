@@ -174,9 +174,6 @@ namespace SpectrumAnalyzer
                                 // 序列化为二进制 BLOB
                                 model.X_cm = SpectrumProcessingService.SerializeSpectrumData(px ?? new double[0]);
                                 model.Y_cm = SpectrumProcessingService.SerializeSpectrumData(py);
-                                // 为兼容旧表结构，将纳米字段也写入（使用相同数据）
-                                model.X_nm = model.X_cm ?? new byte[0];
-                                model.Y_nm = model.Y_cm ?? new byte[0];
 
                                 db.SaveSubstance(model, "RamanSpectrum");
                                 successCount++;
@@ -1126,7 +1123,7 @@ namespace SpectrumAnalyzer
 
             if (_viewModel?.CurrentConfig?.CropBelow200 == true)
             {
-                var cropped = ApplyLowFrequencyCutoff(displayX, displayY, 200.0);
+                var cropped = PreprocessingService.ApplyLowFrequencyCutoff(displayX, displayY, 200.0);
                 displayX = cropped.croppedX;
                 displayY = cropped.croppedY;
             }
@@ -1247,34 +1244,6 @@ namespace SpectrumAnalyzer
             MainPlot.MouseMove += MainPlot_MouseMove;
             MainPlot.MouseDown -= MainPlot_MouseDown;
             MainPlot.MouseDown += MainPlot_MouseDown;
-        }
-
-        /// <summary>
-        /// 低频区间裁剪
-        /// </summary>
-        private (double[] croppedX, double[] croppedY) ApplyLowFrequencyCutoff(double[] x, double[] y, double cutoffWavenumber)
-        {
-            int startIndex = 0;
-            for (int i = 0; i < x.Length; i++)
-            {
-                if (x[i] >= cutoffWavenumber)
-                {
-                    startIndex = i;
-                    break;
-                }
-            }
-
-            if (startIndex == 0)
-                return (x, y);
-
-            int count = x.Length - startIndex;
-            double[] croppedX = new double[count];
-            double[] croppedY = new double[count];
-
-            Array.Copy(x, startIndex, croppedX, 0, count);
-            Array.Copy(y, startIndex, croppedY, 0, count);
-
-            return (croppedX, croppedY);
         }
 
         /// <summary>

@@ -73,23 +73,25 @@ namespace SpectrumAnalyzer.Data
                 )");
         }
 
-        // 3. 自动检测升级现有本地旧版数据库结构，追加缺失的列
-        try
+        // 3. 自动检测并升级现有本地旧版数据库结构，仅追加缺失的列（用 PRAGMA table_info 判定，而非靠 ALTER 报错猜测）
+        using (var conn = new SQLiteConnection(dbPath))
         {
-            using (var conn = new SQLiteConnection(dbPath))
-            {
-                conn.Open();
-                // 升级补丁：追加必要列
-                conn.Execute("ALTER TABLE ReferenceSpectrum ADD COLUMN X_cm TEXT");
-                conn.Execute("ALTER TABLE ReferenceSpectrum ADD COLUMN Y_cm TEXT");
-                conn.Execute("ALTER TABLE ReferenceSpectrum ADD COLUMN Reserved1 TEXT");
-                conn.Execute("ALTER TABLE ReferenceSpectrum ADD COLUMN Reserved2 TEXT");
-            }
+            conn.Open();
+            EnsureColumnExists(conn, "ReferenceSpectrum", "X_cm", "TEXT");
+            EnsureColumnExists(conn, "ReferenceSpectrum", "Y_cm", "TEXT");
+            EnsureColumnExists(conn, "ReferenceSpectrum", "Reserved1", "TEXT");
+            EnsureColumnExists(conn, "ReferenceSpectrum", "Reserved2", "TEXT");
         }
-        catch
-        {
-            // 忽略因列已存在导致的错误
-        }
+    }
+
+    /// <summary>
+    /// 若数据表缺少指定列，则通过 ALTER TABLE 追加；已存在则跳过
+    /// </summary>
+    private static void EnsureColumnExists(IDbConnection conn, string table, string column, string columnDef)
+    {
+        var names = new HashSet<string>(conn.Query<string>($"SELECT name FROM pragma_table_info('{table}')"));
+        if (!names.Contains(column))
+            conn.Execute($"ALTER TABLE {table} ADD COLUMN {column} {columnDef}");
     }
 
     // --- 支持全谱列的通用保存方法 ---

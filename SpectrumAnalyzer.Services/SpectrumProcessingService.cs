@@ -100,7 +100,7 @@ namespace SpectrumAnalyzer.Services
                     // 1. 执行低频区间裁剪
                     if (config.CropBelow200)
                     {
-                        var cropped = ApplyLowFrequencyCutoff(activeX, activeYRaw, 200.0);
+                        var cropped = PreprocessingService.ApplyLowFrequencyCutoff(activeX, activeYRaw, 200.0);
                         activeX = cropped.croppedX;
                         activeYRaw = cropped.croppedY;
                     }
@@ -217,34 +217,6 @@ namespace SpectrumAnalyzer.Services
             }
 
             return y;
-        }
-
-        /// <summary>
-        /// 执行低频区间裁剪 (去除低于阈值的波数)
-        /// </summary>
-        private (double[] croppedX, double[] croppedY) ApplyLowFrequencyCutoff(double[] x, double[] y, double cutoffWavenumber)
-        {
-            int startIndex = 0;
-            for (int i = 0; i < x.Length; i++)
-            {
-                if (x[i] >= cutoffWavenumber)
-                {
-                    startIndex = i;
-                    break;
-                }
-            }
-
-            if (startIndex == 0)
-                return (x, y);
-
-            int count = x.Length - startIndex;
-            double[] croppedX = new double[count];
-            double[] croppedY = new double[count];
-
-            Array.Copy(x, startIndex, croppedX, 0, count);
-            Array.Copy(y, startIndex, croppedY, 0, count);
-
-            return (croppedX, croppedY);
         }
 
         /// <summary>
