@@ -86,5 +86,10 @@ namespace SpectrumAnalyzer.Data.Repositories
         /// 按CAS号搜索标准光谱
         /// </summary>
         List<ReferenceSpectrumModel> SearchByCasNumber(string casNumber);
+
+        /// <summary>
+        /// 批量导入标准参考光谱
+        /// </summary>
+        void ImportReferenceSpectra(List<ReferenceSpectrumModel> list);
     }
 }

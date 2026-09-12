@@ -140,7 +140,6 @@ namespace SpectrumAnalyzer
             {
                 int total = dlg.FileNames.Length;
                 int successCount = 0;
-                var db = new DatabaseService();
 
                 foreach (var file in dlg.FileNames)
                 {
@@ -175,7 +174,7 @@ namespace SpectrumAnalyzer
                                 model.X_cm = SpectrumProcessingService.SerializeSpectrumData(px ?? new double[0]);
                                 model.Y_cm = SpectrumProcessingService.SerializeSpectrumData(py);
 
-                                db.SaveSubstance(model, "RamanSpectrum");
+                                _viewModel.RamanRepository.Add(model);
                                 successCount++;
                             }
                         }
@@ -268,7 +267,7 @@ namespace SpectrumAnalyzer
                 }
 
                 // 获取参考库数据（优先使用 ViewModel 缓存）
-                var list = _viewModel?.ReferenceSpectraList != null ? new System.Collections.Generic.List<ReferenceSpectrumModel>(_viewModel.ReferenceSpectraList) : new DatabaseService().GetReferenceLibrary();
+                var list = _viewModel?.ReferenceSpectraList != null ? new System.Collections.Generic.List<ReferenceSpectrumModel>(_viewModel.ReferenceSpectraList) : _viewModel?.ReferenceRepository?.GetAll();
 
                 if (list == null || list.Count == 0)
                 {
@@ -352,13 +351,12 @@ namespace SpectrumAnalyzer
                     if (item.Y_cm == null) item.Y_cm = "[]";
                 }
 
-                var db = new DatabaseService();
-                db.ImportReferenceSpectra(list);
+                _viewModel.ReferenceRepository.ImportReferenceSpectra(list);
 
                 // 刷新 ViewModel 缓存并 UI 列表
                 if (_viewModel != null)
                 {
-                    var refreshed = db.GetReferenceLibrary();
+                    var refreshed = _viewModel.ReferenceRepository.GetAll();
                     _viewModel.ReferenceSpectraList = new System.Collections.ObjectModel.ObservableCollection<ReferenceSpectrumModel>(refreshed);
                     _viewModel.PreprocessStatus = $"已导入 {list.Count} 条参考谱到标准库";
                 }
@@ -426,10 +424,9 @@ namespace SpectrumAnalyzer
                     if (MessageBox.Show($"确认删除选中的 {toDelete.Count} 条实测光谱？", "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                         return;
 
-                    var db = new DatabaseService();
                     foreach (var item in toDelete)
                     {
-                        try { db.DeleteSubstance(item.Id, "RamanSpectrum"); }
+                        try { _viewModel.RamanRepository.Delete(item.Id); }
                         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"删除实测光谱 {item.Id} 失败: {ex.Message}"); }
                     }
 
@@ -448,10 +445,9 @@ namespace SpectrumAnalyzer
                     if (MessageBox.Show($"确认删除选中的 {toDelete.Count} 条参考光谱？", "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                         return;
 
-                    var db = new DatabaseService();
                     foreach (var item in toDelete)
                     {
-                        try { db.DeleteSubstance(item.Id, "ReferenceSpectrum"); }
+                        try { _viewModel.ReferenceRepository.Delete(item.Id); }
                         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"删除参考光谱 {item.Id} 失败: {ex.Message}"); }
                     }
 
@@ -505,8 +501,7 @@ namespace SpectrumAnalyzer
                     // 直接使用新的 DatabaseService 保存到 ReferenceSpectrum 表
                     try
                     {
-                        var db = new DatabaseService();
-                        db.SaveSubstance(model, "ReferenceSpectrum");
+                        _viewModel.ReferenceRepository.Add(model);
 
                         // 将新记录加入 ViewModel 的集合以立即更新 UI
                         if (_viewModel.ReferenceSpectraList != null)
@@ -640,8 +635,7 @@ namespace SpectrumAnalyzer
                     {
                         try
                         {
-                            var db = new DatabaseService();
-                            db.UpdateRamanSpectrum(model);
+                            _viewModel.RamanRepository.Update(model);
                             RefreshMainList();
                         }
                         catch (Exception ex)
@@ -660,8 +654,7 @@ namespace SpectrumAnalyzer
                         {
                             try
                             {
-                                var db = new DatabaseService();
-                                db.UpdateReference(win.ResultModel);
+                                _viewModel.ReferenceRepository.Update(win.ResultModel);
                                 try { _viewModel?.ReloadDataList(); } catch { }
                                 RefreshMainList();
                             }

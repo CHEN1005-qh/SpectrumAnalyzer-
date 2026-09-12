@@ -267,5 +267,21 @@ namespace SpectrumAnalyzer.Data.Repositories
                 return new List<ReferenceSpectrumModel>();
             }
         }
+
+        /// <summary>
+        /// 批量导入标准参考光谱
+        /// </summary>
+        public void ImportReferenceSpectra(List<ReferenceSpectrumModel> list)
+        {
+            try
+            {
+                _databaseService.ImportReferenceSpectra(list);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"批量导入标准光谱失败: {ex.Message}");
+                throw;
+            }
+        }
     }
 }

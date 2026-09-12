@@ -6,6 +6,7 @@ using System.Windows.Input;
 using SpectrumAnalyzer.Services;
 using SpectrumAnalyzer.Core;
 using SpectrumAnalyzer.Data;
+using SpectrumAnalyzer.Data.Repositories;
 
 namespace SpectrumAnalyzer.ViewModels
 {
@@ -18,6 +19,8 @@ namespace SpectrumAnalyzer.ViewModels
         private readonly SpectrumProcessingService _processingService;
         private readonly SpectrumMatchingService _matchingService;
         private readonly DatabaseService _databaseService;
+        public IRamanSpectrumRepository RamanRepository { get; }
+        public IReferenceSpectrumRepository ReferenceRepository { get; }
 
         // 数据属性
         private string _currentSubstanceName = "未知物质";
@@ -462,6 +465,9 @@ namespace SpectrumAnalyzer.ViewModels
         {
             // 初始化服务
             _databaseService = new DatabaseService();
+            // 基础设施：仓储接口（供 UI 层访问数据，隔离对 DatabaseService 的直接依赖）
+            RamanRepository = new RamanSpectrumRepository(_databaseService);
+            ReferenceRepository = new ReferenceSpectrumRepository(_databaseService);
             _processingService = new SpectrumProcessingService(_databaseService);
             // 初始化匹配服务（基于已有数据库）
             _matchingService = new SpectrumMatchingService(_databaseService);
