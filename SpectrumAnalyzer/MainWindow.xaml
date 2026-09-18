@@ -325,12 +325,6 @@
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Content="➕ 入库" Style="{StaticResource SuccessButtonStyle}" Margin="0,0,8,0" Padding="12,5" Click="BtnAddToLibrary_Click"/>
 
-                            <TextBlock Text="检索模式:" VerticalAlignment="Center" Margin="5,0,5,0" Foreground="#475569" FontSize="11" FontWeight="SemiBold"/>
-                            <ComboBox x:Name="CmbSearchMode" Width="135" Height="28" Margin="0,0,10,0" SelectedIndex="0" VerticalContentAlignment="Center">
-                                <ComboBoxItem Content="混合物检索 (Mixture)"/>
-                                <ComboBoxItem Content="纯相单组分 (Pure)"/>
-                            </ComboBox>
-
                             <Button x:Name="BtnMatch" Content="🔍 智能比对" Click="BtnMatch_Click" Style="{StaticResource BrandButtonStyle}" Padding="18,5"/>
 
                         </StackPanel>
