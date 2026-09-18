@@ -1,7 +1,7 @@
 ﻿<Window x:Class="SpectrumAnalyzer.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="高级算法参数配置" Height="540" Width="430" 
+        Title="高级算法参数配置" Height="680" Width="440" 
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         Background="#F8FAFC">
 
@@ -202,158 +202,142 @@
             <TextBlock Text="配置更改将在下一次点击预处理或导入文件时生效" FontSize="11" Foreground="#6C757D" Margin="0,2,0,0"/>
         </StackPanel>
 
-        <!-- 2. 核心选项卡 -->
-        <TabControl Grid.Row="1">
-            <!-- TabItem 1. 去噪与平滑 -->
-            <TabItem Header="去噪/平滑">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="5,0">
-                        <!-- 去毛刺 -->
-                        <GroupBox Header="宇宙射线去除 (Despike)">
-                            <StackPanel>
-                                <CheckBox x:Name="ChkEnableDespike" Content="启用去毛刺算法" Margin="2,0,0,10"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
+        <!-- 2. 全部参数一次性罗列展示（不再按功能分标签页切换） -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="5,0">
+                <!-- 宇宙射线去除 -->
+                <GroupBox Header="宇宙射线去除 (Despike)">
+                    <StackPanel>
+                        <CheckBox x:Name="ChkEnableDespike" Content="启用去毛刺算法" Margin="2,0,0,10"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                                    <Label Grid.Row="0" Grid.Column="0" Content="Z-Score阈值:" Margin="0,4"/>
-                                    <TextBox Grid.Row="0" Grid.Column="1" x:Name="TxtDespikeZ" Margin="10,4,0,4"
-                                             ToolTip="去毛刺的检测灵敏度。数值越小越敏感，推荐值：6.0 ~ 12.0"/>
+                            <Label Grid.Row="0" Grid.Column="0" Content="Z-Score阈值:" Margin="0,4"/>
+                            <TextBox Grid.Row="0" Grid.Column="1" x:Name="TxtDespikeZ" Margin="10,4,0,4"
+                                     ToolTip="去毛刺的检测灵敏度。数值越小越敏感，推荐值：6.0 ~ 12.0"/>
 
-                                    <Label Grid.Row="1" Grid.Column="0" Content="检测窗口大小:" Margin="0,4"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtDespikeWindow" Margin="10,4,0,4"
-                                             ToolTip="滑动比对窗口半径，单位为数据点数。推荐值：2 ~ 5"/>
-                                </Grid>
-                            </StackPanel>
-                        </GroupBox>
-
-                        <!-- SG平滑 -->
-                        <GroupBox Header="Savitzky-Golay 平滑">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-
-                                <Label Grid.Row="0" Grid.Column="0" Content="平滑窗口大小:" Margin="0,4"/>
-                                <TextBox Grid.Row="0" Grid.Column="1" x:Name="TxtSgWindow" Margin="10,4,0,4"
-                                         ToolTip="SG滤波器拟合窗口。必须为大于 3 的正奇数。值越大平滑度越高，但窄峰峰尖易变钝"/>
-
-                                <Label Grid.Row="1" Grid.Column="0" Content="多项式阶数:" Margin="0,4"/>
-                                <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtSgOrder" Margin="10,4,0,4"
-                                         ToolTip="SG滤波器局部拟合的阶数。必须大于0，且必须小于平滑窗口大小。推荐值：2 或 3"/>
-                            </Grid>
-                        </GroupBox>
+                            <Label Grid.Row="1" Grid.Column="0" Content="检测窗口大小:" Margin="0,4"/>
+                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtDespikeWindow" Margin="10,4,0,4"
+                                     ToolTip="滑动比对窗口半径，单位为数据点数。推荐值：2 ~ 5"/>
+                        </Grid>
                     </StackPanel>
-                </ScrollViewer>
-            </TabItem>
+                </GroupBox>
 
-            <!-- TabItem 2. 基线校正 -->
-            <TabItem Header="基线校正">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="5,0">
-                        <GroupBox Header="基线校正算法配置">
-                            <StackPanel>
-                                <CheckBox x:Name="ChkEnableBaseline" Content="启用基线校正算法" Margin="2,0,0,5"/>
-                                <CheckBox x:Name="ChkCropBelow200" Content="裁剪 200 cm⁻¹ 以下数据点 (消除截止滤光片陡坡)" Margin="2,5,0,12" ToolTip="强行裁剪滤光片产生的边缘突起（200cm-1以下无用信号），可显著改善荧光基线的计算精度"/>
+                <!-- Savitzky-Golay 平滑 -->
+                <GroupBox Header="Savitzky-Golay 平滑">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
 
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
+                        <Label Grid.Row="0" Grid.Column="0" Content="平滑窗口大小:" Margin="0,4"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="TxtSgWindow" Margin="10,4,0,4"
+                                 ToolTip="SG滤波器拟合窗口。必须为大于 3 的正奇数。值越大平滑度越高，但窄峰峰尖易变钝"/>
 
-                                    <!-- 算法选择 -->
-                                    <Label Grid.Row="0" Grid.Column="0" Content="基线算法类型:" Margin="0,4"/>
-                                    <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CmbBaselineMethod" Margin="10,4,0,4" 
-                                              SelectionChanged="CmbBaselineMethod_SelectionChanged">
-                                        <ComboBoxItem Content="滚动分位数 (Quantile)"/>
-                                        <ComboBoxItem Content="SNIP 极速剪切算法"/>
-                                    </ComboBox>
+                        <Label Grid.Row="1" Grid.Column="0" Content="多项式阶数:" Margin="0,4"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtSgOrder" Margin="10,4,0,4"
+                                 ToolTip="SG滤波器局部拟合的阶数。必须大于0，且必须小于平滑窗口大小。推荐值：2 或 3"/>
+                    </Grid>
+                </GroupBox>
 
-                                    <!-- 滚动分位数参数 -->
-                                    <Label Grid.Row="1" Grid.Column="0" x:Name="LblBaseWindow" Content="基线滚动窗口:" Margin="0,4"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtBaseWindow" Margin="10,4,0,4"
-                                             ToolTip="滚动窗口点数。推荐值：151 ~ 301"/>
+                <!-- 基线校正 -->
+                <GroupBox Header="基线校正">
+                    <StackPanel>
+                        <CheckBox x:Name="ChkEnableBaseline" Content="启用基线校正算法" Margin="2,0,0,5"/>
+                        <CheckBox x:Name="ChkCropBelow200" Content="裁剪 200 cm⁻¹ 以下数据点 (消除截止滤光片陡坡)" Margin="2,5,0,12" ToolTip="强行裁剪滤光片产生的边缘突起（200cm-1以下无用信号），可显著改善荧光基线的计算精度"/>
 
-                                    <Label Grid.Row="2" Grid.Column="0" x:Name="LblBaseQuantile" Content="估计分位数:" Margin="0,4"/>
-                                    <TextBox Grid.Row="2" Grid.Column="1" x:Name="TxtBaseQuantile" Margin="10,4,0,4"
-                                             ToolTip="高度分位数。推荐值：0.01 ~ 0.05"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                                    <Label Grid.Row="3" Grid.Column="0" x:Name="LblBaseSmooth" Content="基线平滑窗口:" Margin="0,4"/>
-                                    <TextBox Grid.Row="3" Grid.Column="1" x:Name="TxtBaseSmooth" Margin="10,4,0,4"
-                                             ToolTip="对基线再平滑的窗口大小（奇数）。推荐值：51 ~ 101"/>
+                            <!-- 算法选择 -->
+                            <Label Grid.Row="0" Grid.Column="0" Content="基线算法类型:" Margin="0,4"/>
+                            <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CmbBaselineMethod" Margin="10,4,0,4" 
+                                      SelectionChanged="CmbBaselineMethod_SelectionChanged">
+                                <ComboBoxItem Content="滚动分位数 (Quantile)"/>
+                                <ComboBoxItem Content="SNIP 极速剪切算法"/>
+                            </ComboBox>
 
-                                    <!-- SNIP参数 -->
-                                    <Label Grid.Row="4" Grid.Column="0" x:Name="LblSnipIter" Content="SNIP 迭代次数:" Margin="0,4"/>
-                                    <TextBox Grid.Row="4" Grid.Column="1" x:Name="TxtSnipIterations" Margin="10,4,0,4"
-                                             ToolTip="迭代切割次数。值越小越能跟踪陡坡，值越大基线越平缓。推荐值：15 ~ 40"/>
-                                </Grid>
-                            </StackPanel>
-                        </GroupBox>
+                            <!-- 滚动分位数参数 -->
+                            <Label Grid.Row="1" Grid.Column="0" x:Name="LblBaseWindow" Content="基线滚动窗口:" Margin="0,4"/>
+                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtBaseWindow" Margin="10,4,0,4"
+                                     ToolTip="滚动窗口点数。推荐值：151 ~ 301"/>
+
+                            <Label Grid.Row="2" Grid.Column="0" x:Name="LblBaseQuantile" Content="估计分位数:" Margin="0,4"/>
+                            <TextBox Grid.Row="2" Grid.Column="1" x:Name="TxtBaseQuantile" Margin="10,4,0,4"
+                                     ToolTip="高度分位数。推荐值：0.01 ~ 0.05"/>
+
+                            <Label Grid.Row="3" Grid.Column="0" x:Name="LblBaseSmooth" Content="基线平滑窗口:" Margin="0,4"/>
+                            <TextBox Grid.Row="3" Grid.Column="1" x:Name="TxtBaseSmooth" Margin="10,4,0,4"
+                                     ToolTip="对基线再平滑的窗口大小（奇数）。推荐值：51 ~ 101"/>
+
+                            <!-- SNIP参数 -->
+                            <Label Grid.Row="4" Grid.Column="0" x:Name="LblSnipIter" Content="SNIP 迭代次数:" Margin="0,4"/>
+                            <TextBox Grid.Row="4" Grid.Column="1" x:Name="TxtSnipIterations" Margin="10,4,0,4"
+                                     ToolTip="迭代切割次数。值越小越能跟踪陡坡，值越大基线越平缓。推荐值：15 ~ 40"/>
+                        </Grid>
                     </StackPanel>
-                </ScrollViewer>
-            </TabItem>
+                </GroupBox>
 
-            <!-- TabItem 3. 寻峰与辅助 -->
-            <TabItem Header="寻峰/归一化">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="5,0">
-                        <GroupBox Header="多物理约束寻峰控制">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
+                <!-- 寻峰 -->
+                <GroupBox Header="多物理约束寻峰控制">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
 
-                                <Label Grid.Row="0" Grid.Column="0" Content="最小信噪比SNR:" Margin="0,4"/>
-                                <TextBox Grid.Row="0" Grid.Column="1" x:Name="TxtMinSnr" Margin="10,4,0,4"
-                                         ToolTip="局部峰强与全局底噪中位数的比值门槛，高于此值才算作有效特征峰"/>
+                        <Label Grid.Row="0" Grid.Column="0" Content="最小信噪比SNR:" Margin="0,4"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="TxtMinSnr" Margin="10,4,0,4"
+                                 ToolTip="局部峰强与全局底噪中位数的比值门槛，高于此值才算作有效特征峰"/>
 
-                                <Label Grid.Row="1" Grid.Column="0" Content="相邻物理间距:" Margin="0,4"/>
-                                <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtMinDist" Margin="10,4,0,4"
-                                         ToolTip="两个相邻特征峰之间的最小物理波数距离(cm-1)。在此间隔内的较小峰会被滤除"/>
+                        <Label Grid.Row="1" Grid.Column="0" Content="相邻物理间距:" Margin="0,4"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtMinDist" Margin="10,4,0,4"
+                                 ToolTip="两个相邻特征峰之间的最小物理波数距离(cm-1)。在此间隔内的较小峰会被滤除"/>
 
-                                <Label Grid.Row="2" Grid.Column="0" Content="高度百分比比值:" Margin="0,4"/>
-                                <TextBox Grid.Row="2" Grid.Column="1" x:Name="TxtMinHeightFrac" Margin="10,4,0,4"
-                                         ToolTip="相较于整体光谱 P95 强度的最小占比门槛。范围为 0 ~ 1.0，用来剔除基线上的微小底噪突起"/>
-                            </Grid>
-                        </GroupBox>
+                        <Label Grid.Row="2" Grid.Column="0" Content="高度百分比比值:" Margin="0,4"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="TxtMinHeightFrac" Margin="10,4,0,4"
+                                 ToolTip="相较于整体光谱 P95 强度的最小占比门槛。范围为 0 ~ 1.0，用来剔除基线上的微小底噪突起"/>
+                    </Grid>
+                </GroupBox>
 
-                        <GroupBox Header="数据尺度辅助选项">
-                            <StackPanel>
-                                <CheckBox x:Name="ChkNormalize" Content="启用 0-1 尺度归一化" Margin="2,4"
-                                          ToolTip="将光谱绝对光强拉平归并到 [0.0 - 1.0] 范围内，便于不同仪器间的数据进行全谱 HQI 对比"/>
-                                <CheckBox x:Name="ChkSubPixel" Content="启用高精度子像素定位" Margin="2,4"
-                                          ToolTip="【注意】关闭此项可确保寻峰数值严格对齐实测原始波数数据点；开启则会进行局部抛物线数学插值预测"/>
-                            </StackPanel>
-                        </GroupBox>
+                <!-- 数据尺度辅助 -->
+                <GroupBox Header="数据尺度辅助选项">
+                    <StackPanel>
+                        <CheckBox x:Name="ChkNormalize" Content="启用 0-1 尺度归一化" Margin="2,4"
+                                  ToolTip="将光谱绝对光强拉平归并到 [0.0 - 1.0] 范围内，便于不同仪器间的数据进行全谱 HQI 对比"/>
+                        <CheckBox x:Name="ChkSubPixel" Content="启用高精度子像素定位" Margin="2,4"
+                                  ToolTip="【注意】关闭此项可确保寻峰数值严格对齐实测原始波数数据点；开启则会进行局部抛物线数学插值预测"/>
                     </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-        </TabControl>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
 
         <!-- 3. 底部功能按钮 -->
         <DockPanel Grid.Row="2" Margin="0,15,0,0">
