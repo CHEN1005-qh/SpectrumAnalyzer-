@@ -22,6 +22,11 @@ namespace SpectrumAnalyzer.Data.Repositories
         List<RamanSpectrumModel> GetAll();
 
         /// <summary>
+        /// 获取实测光谱轻量列表（不含全谱大字段，仅用于列表展示）
+        /// </summary>
+        List<RamanSpectrumModel> GetAllSummary();
+
+        /// <summary>
         /// 获取指定ID的光谱
         /// </summary>
         RamanSpectrumModel GetById(int id);
@@ -56,6 +61,11 @@ namespace SpectrumAnalyzer.Data.Repositories
         /// 获取所有标准光谱
         /// </summary>
         List<ReferenceSpectrumModel> GetAll();
+
+        /// <summary>
+        /// 获取标准光谱轻量列表（不含全谱大字段，仅用于列表展示）
+        /// </summary>
+        List<ReferenceSpectrumModel> GetAllSummary();
 
         /// <summary>
         /// 获取指定ID的标准光谱

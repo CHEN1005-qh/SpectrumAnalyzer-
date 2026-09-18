@@ -299,7 +299,7 @@ namespace SpectrumAnalyzer.Core
                         Spectrum = alignedY
                     });
                 }
-                catch { }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
             }
 
             if (trainSamples.Count == 0)

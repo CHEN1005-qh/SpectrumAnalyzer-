@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using SpectrumAnalyzer.Core;
+using SpectrumAnalyzer.Data.Repositories;
 
 namespace SpectrumAnalyzer
 {
@@ -17,6 +18,13 @@ namespace SpectrumAnalyzer
         // 新增：全谱缓存字段，供数据库存入全波段波位与强度
         private double[] _fullX;
         private double[] _fullY;
+
+        // 分类：由调用方注入全部分类列表，用于下拉选择
+        public IReadOnlyList<CategoryModel> Categories { get; set; }
+        private int? _existingCategoryId;
+
+        // 分类来源：若注入仓储，则每次打开时直接从数据库现读，避免缓存/时序导致不同步
+        public ICategoryRepository CategorySource { get; set; }
 
         // 构造函数 1：新建模式
         public SaveWindow(string defaultName, List<PeakInfo> peaks, double[] fullX = null, double[] fullY = null, string defaultFormula = "", string defaultNote = "")
@@ -46,8 +54,10 @@ namespace SpectrumAnalyzer
             _fullX = fullX;
             _fullY = fullY;
 
-            // 初始化右键快捷菜单
+            // 初始化右键快捷菜单 + 分类下拉
             InitContextMenu();
+            // CategorySource/Categories 由调用方在构造后才注入，故放到 Loaded 再填充分类
+            Loaded += (s, e) => PopulateCategories();
         }
 
         // 构造函数 2：编辑模式
@@ -95,8 +105,12 @@ namespace SpectrumAnalyzer
                 DgPeaks.ItemsSource = _peakList;
             }
 
-            // 初始化右键快捷菜单
+            _existingCategoryId = existingModel.CategoryId;
+
+            // 初始化右键快捷菜单 + 分类下拉
             InitContextMenu();
+            // CategorySource/Categories 由调用方在构造后才注入，故放到 Loaded 再填充分类
+            Loaded += (s, e) => PopulateCategories();
         }
 
         /// <summary>
@@ -121,6 +135,33 @@ namespace SpectrumAnalyzer
 
             // 绑定到 DataGrid 上
             DgPeaks.ContextMenu = menu;
+        }
+
+        /// <summary>
+        /// 填充分类下拉框（树形拍平，用全角空格表示层级），默认选中已存分类或"(未分类)"
+        /// </summary>
+        private void PopulateCategories()
+        {
+            // 优先从数据库现读，回退到调用方注入的快照
+            var cats = CategorySource?.GetAll() ?? Categories;
+            var options = new List<CategoryOption> { new CategoryOption { Id = null, Label = "(未分类)" } };
+            if (cats != null)
+            {
+                var byId = cats.ToDictionary(c => c.Id);
+                foreach (var top in cats.Where(c => !c.ParentId.HasValue).OrderBy(c => c.SortOrder).ThenBy(c => c.Id))
+                    FlattenCategory(top, byId, 0, options);
+            }
+            CmbCategory.ItemsSource = options;
+            CmbCategory.DisplayMemberPath = "Label";
+            CmbCategory.SelectedItem = options.FirstOrDefault(o => o.Id == _existingCategoryId) ?? options[0];
+        }
+
+        private static void FlattenCategory(CategoryModel cat, Dictionary<int, CategoryModel> byId, int depth, List<CategoryOption> result)
+        {
+            result.Add(new CategoryOption { Id = cat.Id, Label = new string('\u3000', depth * 2) + cat.Name });
+            var children = byId.Values.Where(x => x.ParentId == cat.Id).OrderBy(x => x.SortOrder).ThenBy(x => x.Id).ToList();
+            foreach (var child in children)
+                FlattenCategory(child, byId, depth + 1, result);
         }
 
         // 界面“增加特征峰”实体按钮的点击事件
@@ -152,6 +193,8 @@ namespace SpectrumAnalyzer
         {
             if (string.IsNullOrWhiteSpace(TxtName.Text)) { MessageBox.Show("名称不能为空"); return; }
 
+            int? chosenCategoryId = (CmbCategory.SelectedItem as CategoryOption)?.Id;
+
             // 强制提交流量中所有处于“正在编辑”状态的单元格和行，确保当前光标所在的修改数据落盘
             if (DgPeaks != null)
             {
@@ -176,6 +219,7 @@ namespace SpectrumAnalyzer
                 ResultModel.Grating = TxtGrating.Text;
                 ResultModel.Note = TxtDesc.Text;
                 ResultModel.PeaksJson = JsonConvert.SerializeObject(updatedPeakData);
+                ResultModel.CategoryId = chosenCategoryId;
 
                 // 编辑模式也同步支持更新全谱 JSON
                 if (_fullX != null) ResultModel.X_cm = JsonConvert.SerializeObject(_fullX);
@@ -192,6 +236,7 @@ namespace SpectrumAnalyzer
                     Grating = TxtGrating.Text,
                     Note = TxtDesc.Text,
                     PeaksJson = JsonConvert.SerializeObject(updatedPeakData),
+                    CategoryId = chosenCategoryId,
 
                     // 将缓存的全谱信号一并序列化保存到数据库中
                     X_cm = _fullX != null ? JsonConvert.SerializeObject(_fullX) : null,
@@ -212,6 +257,15 @@ namespace SpectrumAnalyzer
         {
             public double X { get; set; } // 对应峰位
             public double Y { get; set; } // 对应强度 (%)
+        }
+
+        /// <summary>
+        /// 分类下拉框选项（Id 为 null 表示"未分类"）
+        /// </summary>
+        public class CategoryOption
+        {
+            public int? Id { get; set; }
+            public string Label { get; set; }
         }
     }
 }

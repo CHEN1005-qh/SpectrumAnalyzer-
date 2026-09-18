@@ -34,14 +34,29 @@ namespace SpectrumAnalyzer.Data.Repositories
         }
 
         /// <summary>
+        /// 获取实测光谱轻量列表（不含全谱大字段）
+        /// </summary>
+        public List<RamanSpectrumModel> GetAllSummary()
+        {
+            try
+            {
+                return _databaseService.GetRamanLibrarySummary();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"获取实测光谱轻量列表失败: {ex.Message}");
+                return new List<RamanSpectrumModel>();
+            }
+        }
+
+        /// <summary>
         /// 获取指定ID的光谱
         /// </summary>
         public RamanSpectrumModel GetById(int id)
         {
             try
             {
-                var all = GetAll();
-                return all.FirstOrDefault(s => s.Id == id);
+                return _databaseService.GetRamanSpectrumById(id);
             }
             catch (Exception ex)
             {
@@ -114,9 +129,7 @@ namespace SpectrumAnalyzer.Data.Repositories
                 if (string.IsNullOrWhiteSpace(name))
                     return GetAll();
 
-                var all = GetAll();
-                return all.Where(s => s.Name.IndexOf(name, StringComparison.OrdinalIgnoreCase) >= 0)
-                         .ToList();
+                return _databaseService.SearchRamanByName(name);
             }
             catch (Exception ex)
             {
@@ -155,14 +168,29 @@ namespace SpectrumAnalyzer.Data.Repositories
         }
 
         /// <summary>
+        /// 获取标准光谱轻量列表（不含全谱大字段）
+        /// </summary>
+        public List<ReferenceSpectrumModel> GetAllSummary()
+        {
+            try
+            {
+                return _databaseService.GetReferenceLibrarySummary();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"获取标准光谱轻量列表失败: {ex.Message}");
+                return new List<ReferenceSpectrumModel>();
+            }
+        }
+
+        /// <summary>
         /// 获取指定ID的标准光谱
         /// </summary>
         public ReferenceSpectrumModel GetById(int id)
         {
             try
             {
-                var all = GetAll();
-                return all.FirstOrDefault(s => s.Id == id);
+                return _databaseService.GetReferenceSpectrumById(id);
             }
             catch (Exception ex)
             {
@@ -235,9 +263,7 @@ namespace SpectrumAnalyzer.Data.Repositories
                 if (string.IsNullOrWhiteSpace(substanceName))
                     return GetAll();
 
-                var all = GetAll();
-                return all.Where(s => s.SubstanceName.IndexOf(substanceName, StringComparison.OrdinalIgnoreCase) >= 0)
-                         .ToList();
+                return _databaseService.SearchReferenceBySubstanceName(substanceName);
             }
             catch (Exception ex)
             {
@@ -256,10 +282,7 @@ namespace SpectrumAnalyzer.Data.Repositories
                 if (string.IsNullOrWhiteSpace(casNumber))
                     return GetAll();
 
-                var all = GetAll();
-                return all.Where(s => !string.IsNullOrEmpty(s.CasNumber) && 
-                                     s.CasNumber.IndexOf(casNumber, StringComparison.OrdinalIgnoreCase) >= 0)
-                         .ToList();
+                return _databaseService.SearchReferenceByCasNumber(casNumber);
             }
             catch (Exception ex)
             {

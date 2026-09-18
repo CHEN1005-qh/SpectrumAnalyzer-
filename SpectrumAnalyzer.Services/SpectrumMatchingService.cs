@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 using SpectrumAnalyzer.Core;
-using SpectrumAnalyzer.Data;
+using SpectrumAnalyzer.Data.Repositories;
 
 namespace SpectrumAnalyzer.Services
 {
@@ -29,12 +29,12 @@ namespace SpectrumAnalyzer.Services
     /// </summary>
     public class SpectrumMatchingService : ISpectrumMatchingService
     {
-        private readonly DatabaseService _databaseService;
+        private readonly IReferenceSpectrumRepository _referenceRepository;
         private readonly KnnClassifier _classifier;
 
-        public SpectrumMatchingService(DatabaseService databaseService)
+        public SpectrumMatchingService(IReferenceSpectrumRepository referenceRepository)
         {
-            _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
+            _referenceRepository = referenceRepository ?? throw new ArgumentNullException(nameof(referenceRepository));
             _classifier = new KnnClassifier(k: 3, pcaComponents: 5);
 
             // 初始化分类器：加载参考库数据
@@ -48,7 +48,7 @@ namespace SpectrumAnalyzer.Services
         {
             try
             {
-                var referenceSpectra = _databaseService.GetReferenceLibrary();
+                var referenceSpectra = _referenceRepository.GetAll();
                 var trainingSamples = new List<SpectralSample>();
 
                 foreach (var refSpectrum in referenceSpectra)

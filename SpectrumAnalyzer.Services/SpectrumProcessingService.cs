@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using SpectrumAnalyzer.Core;
-using SpectrumAnalyzer.Data;
+using SpectrumAnalyzer.Data.Repositories;
 
 namespace SpectrumAnalyzer.Services
 {
@@ -15,7 +15,8 @@ namespace SpectrumAnalyzer.Services
     /// </summary>
     public class SpectrumProcessingService
     {
-        private readonly DatabaseService _databaseService;
+        private readonly IRamanSpectrumRepository _ramanRepository;
+        private readonly IReferenceSpectrumRepository _referenceRepository;
         // 限制并发处理数量，避免同时运行过多耗时任务导致内存/CPU 激增
         private static readonly SemaphoreSlim _processingSemaphore = new SemaphoreSlim(Math.Max(1, Environment.ProcessorCount));
 
@@ -47,9 +48,10 @@ namespace SpectrumAnalyzer.Services
         public double[] CurrentX => _currentX;
         public double[] CurrentYRaw => _currentYRaw;
 
-        public SpectrumProcessingService(DatabaseService databaseService)
+        public SpectrumProcessingService(IRamanSpectrumRepository ramanRepository, IReferenceSpectrumRepository referenceRepository)
         {
-            _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
+            _ramanRepository = ramanRepository ?? throw new ArgumentNullException(nameof(ramanRepository));
+            _referenceRepository = referenceRepository ?? throw new ArgumentNullException(nameof(referenceRepository));
         }
 
         /// <summary>
@@ -226,7 +228,8 @@ namespace SpectrumAnalyzer.Services
         {
             try
             {
-                return _databaseService.GetRamanLibrary();
+                // 列表只需轻量数据（不含全谱大字段），降低内存占用
+                return _ramanRepository.GetAllSummary();
             }
             catch (Exception ex)
             {
@@ -242,7 +245,8 @@ namespace SpectrumAnalyzer.Services
         {
             try
             {
-                return _databaseService.GetReferenceLibrary();
+                // 列表只需轻量数据（不含全谱大字段），降低内存占用
+                return _referenceRepository.GetAllSummary();
             }
             catch (Exception ex)
             {

@@ -218,6 +218,11 @@
                             <TextBlock Text="光栅规格 (l/mm):" Foreground="#64748B" FontSize="11" Margin="2,0,0,4"/>
                             <TextBox x:Name="TxtGrating" Style="{StaticResource ModernTextBoxStyle}"/>
                         </StackPanel>
+                        <StackPanel Margin="4" Grid.ColumnSpan="2">
+                            <TextBlock Text="归类分类 (可留空 = 未分类):" Foreground="#64748B" FontSize="11" Margin="2,0,0,4"/>
+                            <ComboBox x:Name="CmbCategory" Height="28" VerticalContentAlignment="Center" Padding="6,0"
+                                      Background="White" BorderBrush="#CBD5E1" BorderThickness="1"/>
+                        </StackPanel>
                     </UniformGrid>
 
                     <StackPanel Margin="4,10,4,4">

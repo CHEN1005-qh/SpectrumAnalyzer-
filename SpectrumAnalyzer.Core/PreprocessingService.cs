@@ -297,8 +297,9 @@ namespace SpectrumAnalyzer.Core
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"解析参考峰列表失败: {ex.Message}");
             }
 
             return peaks;

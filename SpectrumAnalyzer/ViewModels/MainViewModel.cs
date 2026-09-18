@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using SpectrumAnalyzer.Services;
 using SpectrumAnalyzer.Core;
@@ -18,9 +20,9 @@ namespace SpectrumAnalyzer.ViewModels
     {
         private readonly SpectrumProcessingService _processingService;
         private readonly SpectrumMatchingService _matchingService;
-        private readonly DatabaseService _databaseService;
         public IRamanSpectrumRepository RamanRepository { get; }
         public IReferenceSpectrumRepository ReferenceRepository { get; }
+        public ICategoryRepository CategoryRepository { get; }
 
         // 数据属性
         private string _currentSubstanceName = "未知物质";
@@ -35,6 +37,9 @@ namespace SpectrumAnalyzer.ViewModels
         private ObservableCollection<RamanSpectrumModel> _ramanSpectraList;
         private ObservableCollection<ReferenceSpectrumModel> _referenceSpectraList;
 
+        // 全部分类（扁平数组，用于界面下拉/树形构建）
+        private List<CategoryModel> _categories = new List<CategoryModel>();
+
         // 当前选中的光谱
         private RamanSpectrumModel _selectedRamanSpectrum;
         private ReferenceSpectrumModel _selectedReferenceSpectrum;
@@ -44,11 +49,14 @@ namespace SpectrumAnalyzer.ViewModels
 
         // 命令
         private RelayCommand _loadRamanDataCommand;
-        private RelayCommand _preprocessCommand;
+        private ICommand _preprocessCommand;
         private RelayCommand _classifyCommand;
         private RelayCommand _resetCommand;
         private RelayCommand _deleteCommand;
         private RelayCommand _saveCommand;
+
+        // 预处理任务的取消令牌源：新任务开始前取消旧的，避免旧结果覆盖新结果
+        private CancellationTokenSource _preprocessCts;
 
         #region 公开属性
 
@@ -145,6 +153,61 @@ namespace SpectrumAnalyzer.ViewModels
         }
 
         /// <summary>
+        /// 当前全部分类（扁平）。供界面下拉/树形使用
+        /// </summary>
+        public IReadOnlyList<CategoryModel> Categories => _categories;
+
+        /// <summary>
+        /// 从数据库重新加载分类，并刷新参考谱列表的分类显示
+        /// </summary>
+        public void ReloadCategories()
+        {
+            try
+            {
+                _categories = CategoryRepository.GetAll();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"加载分类失败: {ex.Message}");
+                _categories = new List<CategoryModel>();
+            }
+            ApplyReferenceCategoryDisplay();
+        }
+
+        /// <summary>
+        /// 为参考谱列表每一项填充分类路径（如 "材料 / 金属"）
+        /// </summary>
+        public void ApplyReferenceCategoryDisplay()
+        {
+            try
+            {
+                if (ReferenceSpectraList == null) return;
+                var byId = _categories.ToDictionary(c => c.Id);
+                var memo = new Dictionary<int, string>();
+                foreach (var s in ReferenceSpectraList)
+                {
+                    s.CategoryDisplay = s.CategoryId.HasValue && byId.TryGetValue(s.CategoryId.Value, out var cat)
+                        ? BuildCategoryPath(byId, memo, cat)
+                        : "未分类";
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"应用分类显示失败: {ex.Message}");
+            }
+        }
+
+        private static string BuildCategoryPath(Dictionary<int, CategoryModel> byId, Dictionary<int, string> memo, CategoryModel cat)
+        {
+            if (memo.TryGetValue(cat.Id, out var cached)) return cached;
+            var path = cat.Name ?? "";
+            if (cat.ParentId.HasValue && byId.TryGetValue(cat.ParentId.Value, out var parent))
+                path = BuildCategoryPath(byId, memo, parent) + " / " + path;
+            memo[cat.Id] = path;
+            return path;
+        }
+
+        /// <summary>
         /// 预处理状态文本
         /// </summary>
         public string PreprocessStatus
@@ -225,40 +288,52 @@ namespace SpectrumAnalyzer.ViewModels
                 if (!SetProperty(ref _selectedReferenceSpectrum, value))
                     return;
 
-                // 当在参考谱列表切换时，自动将选中参考谱加载到处理服务并触发预处理与 UI 刷新
-                try
+                // 当在参考谱列表切换时，异步加载并预处理该光谱，避免阻塞 UI 线程
+                if (_selectedReferenceSpectrum != null && !IsRamanMode)
                 {
-                    if (_selectedReferenceSpectrum != null && !IsRamanMode)
-                    {
-                        // 解析参考谱中的 X_cm/Y_cm（JSON 格式）并加载为原始数据
-                        var x = ParseJsonToDoubleArray(_selectedReferenceSpectrum.X_cm);
-                        var y = ParseJsonToDoubleArray(_selectedReferenceSpectrum.Y_cm);
-
-                        if (x != null && y != null && x.Length == y.Length && x.Length > 0)
-                        {
-                            _processingService.LoadRawData(x, y);
-
-                            // 尝试使用当前算法配置进行预处理，更新缓存并通知 UI
-                            if (CurrentConfig == null)
-                                CurrentConfig = new AlgorithmConfig();
-
-                            var res = _processingService.PreprocessData(CurrentConfig);
-                            PreprocessStatus = res.Success ? res.Message : ("参考谱处理失败: " + res.Message);
-
-                            // 通知依赖的绑定属性更新绘图
-                            OnPropertyChanged(nameof(CurrentX));
-                            OnPropertyChanged(nameof(CurrentYRaw));
-                            OnPropertyChanged(nameof(CurrentXProcessed));
-                            OnPropertyChanged(nameof(CurrentYProcessed));
-                            OnPropertyChanged(nameof(CurrentPeaks));
-                        }
-                    }
+                    LoadReferenceAndProcessAsync(_selectedReferenceSpectrum);
                 }
-                catch (Exception ex)
-                {
-                    PreprocessStatus = "加载参考谱失败: " + ex.Message;
-                    System.Diagnostics.Debug.WriteLine(ex);
-                }
+            }
+        }
+
+        /// <summary>
+        /// 异步加载指定参考谱并预处理（重计算在后台线程执行，避免 UI 卡顿）。
+        /// </summary>
+        private async void LoadReferenceAndProcessAsync(ReferenceSpectrumModel model)
+        {
+            try
+            {
+                // 列表项为轻量数据，需按需加载含全谱的完整记录
+                if (string.IsNullOrEmpty(model.X_cm))
+                    model = ReferenceRepository.GetById(model.Id);
+
+                if (model == null) return;
+
+                var x = ParseJsonToDoubleArray(model.X_cm);
+                var y = ParseJsonToDoubleArray(model.Y_cm);
+
+                if (x == null || y == null || x.Length != y.Length || x.Length == 0)
+                    return;
+
+                _processingService.LoadRawData(x, y);
+
+                if (CurrentConfig == null)
+                    CurrentConfig = new AlgorithmConfig();
+
+                var res = await _processingService.PreprocessDataAsync(CurrentConfig, CancellationToken.None);
+
+                PreprocessStatus = res.Success ? res.Message : ("参考谱处理失败: " + res.Message);
+
+                OnPropertyChanged(nameof(CurrentX));
+                OnPropertyChanged(nameof(CurrentYRaw));
+                OnPropertyChanged(nameof(CurrentXProcessed));
+                OnPropertyChanged(nameof(CurrentYProcessed));
+                OnPropertyChanged(nameof(CurrentPeaks));
+            }
+            catch (Exception ex)
+            {
+                PreprocessStatus = "加载参考谱失败: " + ex.Message;
+                System.Diagnostics.Debug.WriteLine(ex);
             }
         }
 
@@ -397,7 +472,7 @@ namespace SpectrumAnalyzer.ViewModels
             get
             {
                 if (_preprocessCommand == null)
-                    _preprocessCommand = new RelayCommand(ExecutePreprocess);
+                    _preprocessCommand = new AsyncRelayCommand(ExecutePreprocessAsync);
                 return _preprocessCommand;
             }
         }
@@ -464,13 +539,14 @@ namespace SpectrumAnalyzer.ViewModels
         public MainViewModel()
         {
             // 初始化服务
-            _databaseService = new DatabaseService();
+            var databaseService = new DatabaseService();
             // 基础设施：仓储接口（供 UI 层访问数据，隔离对 DatabaseService 的直接依赖）
-            RamanRepository = new RamanSpectrumRepository(_databaseService);
-            ReferenceRepository = new ReferenceSpectrumRepository(_databaseService);
-            _processingService = new SpectrumProcessingService(_databaseService);
+            RamanRepository = new RamanSpectrumRepository(databaseService);
+            ReferenceRepository = new ReferenceSpectrumRepository(databaseService);
+            CategoryRepository = new CategoryRepository(databaseService);
+            _processingService = new SpectrumProcessingService(RamanRepository, ReferenceRepository);
             // 初始化匹配服务（基于已有数据库）
-            _matchingService = new SpectrumMatchingService(_databaseService);
+            _matchingService = new SpectrumMatchingService(ReferenceRepository);
 
             // 初始化配置
             _currentConfig = new AlgorithmConfig();
@@ -479,6 +555,9 @@ namespace SpectrumAnalyzer.ViewModels
             // 初始化集合
             _ramanSpectraList = new ObservableCollection<RamanSpectrumModel>();
             _referenceSpectraList = new ObservableCollection<ReferenceSpectrumModel>();
+
+            // 加载分类（先于列表刷新，供分类路径显示）
+            ReloadCategories();
 
             // 加载数据
             RefreshDataList();
@@ -500,8 +579,9 @@ namespace SpectrumAnalyzer.ViewModels
                     }
                 };
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine(ex);
             }
         }
 
@@ -575,7 +655,7 @@ namespace SpectrumAnalyzer.ViewModels
         {
             try
             {
-                return _databaseService.GetReferenceLibrary();
+                return ReferenceRepository.GetAll();
             }
             catch
             {
@@ -597,18 +677,18 @@ namespace SpectrumAnalyzer.ViewModels
 
             if (raw is byte[] bytes)
             {
-                try { return SpectrumProcessingService.DeserializeSpectrumData(bytes); } catch { }
+                try { return SpectrumProcessingService.DeserializeSpectrumData(bytes); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
             }
 
             if (raw is string s)
             {
-                try { return Newtonsoft.Json.JsonConvert.DeserializeObject<double[]>(s); } catch { }
+                try { return Newtonsoft.Json.JsonConvert.DeserializeObject<double[]>(s); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                 try
                 {
                     var buf = Convert.FromBase64String(s);
                     return SpectrumProcessingService.DeserializeSpectrumData(buf);
                 }
-                catch { }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
             }
 
             return null;
@@ -631,16 +711,24 @@ namespace SpectrumAnalyzer.ViewModels
                     return;
                 }
 
+                // 列表项为轻量数据，需按需拉取含全谱的完整记录
+                var full = RamanRepository.GetById(SelectedRamanSpectrum.Id);
+                if (full == null)
+                {
+                    PreprocessStatus = "错误：未找到光谱数据";
+                    return;
+                }
+
                 // 反序列化二进制数据为数组
-                double[] xData = SpectrumProcessingService.DeserializeSpectrumData(SelectedRamanSpectrum.X_cm);
-                double[] yData = SpectrumProcessingService.DeserializeSpectrumData(SelectedRamanSpectrum.Y_cm);
+                double[] xData = SpectrumProcessingService.DeserializeSpectrumData(full.X_cm);
+                double[] yData = SpectrumProcessingService.DeserializeSpectrumData(full.Y_cm);
 
                 // 加载到处理服务
                 _processingService.LoadRawData(xData, yData);
 
                 // 更新UI状态
-                CurrentSubstanceName = SelectedRamanSpectrum.Name;
-                PreprocessStatus = $"已加载光谱: {SelectedRamanSpectrum.Name}";
+                CurrentSubstanceName = full.Name;
+                PreprocessStatus = $"已加载光谱: {full.Name}";
             }
             catch (Exception ex)
             {
@@ -650,15 +738,20 @@ namespace SpectrumAnalyzer.ViewModels
         }
 
         /// <summary>
-        /// 执行预处理
+        /// 异步执行预处理：在后台线程计算，避免阻塞 UI 线程；新任务会取消上一次未完成的任务。
         /// </summary>
-        private void ExecutePreprocess()
+        private async Task ExecutePreprocessAsync()
         {
+            // 取消上一次可能仍未完成的预处理任务，避免旧结果覆盖新结果
+            _preprocessCts?.Cancel();
+            _preprocessCts?.Dispose();
+            _preprocessCts = new CancellationTokenSource();
+
+            PreprocessStatus = "正在处理...";
+
             try
             {
-                PreprocessStatus = "正在处理...";
-
-                var result = _processingService.PreprocessData(CurrentConfig);
+                var result = await _processingService.PreprocessDataAsync(CurrentConfig, _preprocessCts.Token);
 
                 if (result.Success)
                 {
@@ -668,6 +761,17 @@ namespace SpectrumAnalyzer.ViewModels
                 {
                     PreprocessStatus = $"预处理失败: {result.Message}";
                 }
+
+                // 通知依赖这些数据的绑定属性刷新（MainWindow 订阅后在后台完成后自动重绘）
+                OnPropertyChanged(nameof(CurrentX));
+                OnPropertyChanged(nameof(CurrentYRaw));
+                OnPropertyChanged(nameof(CurrentXProcessed));
+                OnPropertyChanged(nameof(CurrentYProcessed));
+                OnPropertyChanged(nameof(CurrentPeaks));
+            }
+            catch (OperationCanceledException)
+            {
+                PreprocessStatus = "预处理已取消";
             }
             catch (Exception ex)
             {
@@ -694,7 +798,7 @@ namespace SpectrumAnalyzer.ViewModels
                     return;
                 }
 
-                var library = _databaseService.GetReferenceLibrary();
+                var library = ReferenceRepository.GetAll();
                 if (library == null || library.Count == 0)
                 {
                     ClassificationResult = string.Empty;
@@ -743,13 +847,13 @@ namespace SpectrumAnalyzer.ViewModels
             {
                 if (IsRamanMode && SelectedRamanSpectrum != null)
                 {
-                    _databaseService.DeleteSubstance(SelectedRamanSpectrum.Id, "RamanSpectrum");
+                    RamanRepository.Delete(SelectedRamanSpectrum.Id);
                     RamanSpectraList.Remove(SelectedRamanSpectrum);
                     PreprocessStatus = "已删除实测光谱";
                 }
                 else if (!IsRamanMode && SelectedReferenceSpectrum != null)
                 {
-                    _databaseService.DeleteSubstance(SelectedReferenceSpectrum.Id, "ReferenceSpectrum");
+                    ReferenceRepository.Delete(SelectedReferenceSpectrum.Id);
                     ReferenceSpectraList.Remove(SelectedReferenceSpectrum);
                     PreprocessStatus = "已删除标准光谱";
                 }
@@ -770,12 +874,12 @@ namespace SpectrumAnalyzer.ViewModels
             {
                 if (IsRamanMode && SelectedRamanSpectrum != null)
                 {
-                    _databaseService.UpdateRamanSpectrum(SelectedRamanSpectrum);
+                    RamanRepository.Update(SelectedRamanSpectrum);
                     PreprocessStatus = "实测光谱已保存";
                 }
                 else if (!IsRamanMode && SelectedReferenceSpectrum != null)
                 {
-                    _databaseService.UpdateReference(SelectedReferenceSpectrum);
+                    ReferenceRepository.Update(SelectedReferenceSpectrum);
                     PreprocessStatus = "标准光谱已保存";
 
                     // 同步刷新列表，确保 UI 中的参考库与数据库一致
@@ -823,6 +927,9 @@ namespace SpectrumAnalyzer.ViewModels
 
                 RamanSpectraList = new ObservableCollection<RamanSpectrumModel>(ramanData);
                 ReferenceSpectraList = new ObservableCollection<ReferenceSpectrumModel>(referenceData);
+
+                // 填充分类显示
+                ApplyReferenceCategoryDisplay();
 
                 PreprocessStatus = $"已加载 {ramanData.Count} 条实测光谱, {referenceData.Count} 条标准光谱";
             }
@@ -884,5 +991,44 @@ namespace SpectrumAnalyzer.ViewModels
         public bool CanExecute(object parameter) => _canExecute == null || _canExecute();
 
         public void Execute(object parameter) => _execute();
+    }
+
+    /// <summary>
+    /// 支持异步执行的命令：执行期间 CanExecute 返回 false，防止重复触发。
+    /// </summary>
+    public class AsyncRelayCommand : ICommand
+    {
+        private readonly Func<Task> _execute;
+        private readonly Func<bool> _canExecute;
+        private bool _isExecuting;
+
+        public event EventHandler CanExecuteChanged
+        {
+            add { CommandManager.RequerySuggested += value; }
+            remove { CommandManager.RequerySuggested -= value; }
+        }
+
+        public AsyncRelayCommand(Func<Task> execute, Func<bool> canExecute = null)
+        {
+            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+            _canExecute = canExecute;
+        }
+
+        public bool CanExecute(object parameter) => !_isExecuting && (_canExecute == null || _canExecute());
+
+        public async void Execute(object parameter)
+        {
+            if (_isExecuting) return;
+            _isExecuting = true;
+            try
+            {
+                await _execute();
+            }
+            finally
+            {
+                _isExecuting = false;
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
     }
 }

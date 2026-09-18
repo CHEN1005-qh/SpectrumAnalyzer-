@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace SpectrumAnalyzer.Core
@@ -56,6 +57,12 @@ namespace SpectrumAnalyzer.Core
         public string Note { get; set; }
         public string CreatedAt { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
+        // 分类：NULL 表示未分类；对应 Category 表的 Id
+        public int? CategoryId { get; set; }
+
+        // 非数据库字段：列表展示用，显示分类路径（如 "材料 / 金属"），由 ViewModel 填充
+        public string CategoryDisplay { get; set; }
+
         // 标准库对应为 TEXT 类型，故保留 string
         public string X_cm { get; set; } // 存储标准的 X 轴 JSON
         public string Y_cm { get; set; } // 存储标准的 Y 轴 JSON
@@ -72,6 +79,20 @@ namespace SpectrumAnalyzer.Core
             if (val.Length <= maxLength) return val;
             return val.Substring(0, maxLength) + "...";
         }
+    }
+
+    // 对应 Category 表 (标准库分类，自引用的 ParentId 实现树状结构)
+    public class CategoryModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public int? ParentId { get; set; }   // NULL = 顶级分类
+        public int SortOrder { get; set; }   // 同级排序
+        public string CreatedAt { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+        // 非数据库字段：供 UI 构建树/缩进展示使用
+        public List<CategoryModel> Children { get; set; } = new List<CategoryModel>();
+        public string DisplayPath { get; set; } // 如 "材料 -> 金属"
     }
 
     // --- 双引擎匹配结果模型 ---

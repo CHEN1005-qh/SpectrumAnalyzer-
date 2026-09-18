@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:ScottPlot="clr-namespace:ScottPlot;assembly=ScottPlot.WPF" 
         mc:Ignorable="d"
-        Title="拉曼光谱分析系统 v1.5" Height="780" Width="1450" WindowStartupLocation="CenterScreen">
+        Title="拉曼光谱分析系统 v1.5" Height="780" Width="1350" WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
         <!-- ========================================================== -->
@@ -258,20 +258,22 @@
                         <!-- 工具控制组 -->
                         <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                             <Button x:Name="BtnReset" Content="🔄 重置" Click="BtnReset_Click" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="8,0" Margin="0,0,5,0"/>
-                            <Button x:Name="BtnExport" Content="📤 导出" Click="BtnExport_Click" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="8,0" Margin="0,0,5,0"/>
-                            <Button x:Name="BtnImport" Content="📥 导入" Click="BtnImport_Click" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="8,0" Margin="0,0,5,0"/>
                             <Button x:Name="BtnDelete" Content="🗑 删除" Click="BtnDelete_Click" Style="{StaticResource DangerButtonStyle}" Height="32" Padding="8,0"/>
                         </StackPanel>
                     </Grid>
 
-                    <!-- 2. 库视图切换（Segmented Tab） -->
-                    <Border DockPanel.Dock="Top" Background="#F1F5F9" CornerRadius="8" Padding="2" Margin="0,0,0,12">
-                        <UniformGrid Columns="2">
-                            <RadioButton x:Name="RbExperimental" Content="📊 实测光谱" IsChecked="True" 
-                                         Style="{StaticResource SegmentedTabStyle}" Checked="RbExperimental_Checked"/>
-                            <RadioButton x:Name="RbReference" Content="📚 标准参考库" 
-                                         Style="{StaticResource SegmentedTabStyle}" Checked="RbReference_Checked"/>
-                        </UniformGrid>
+                    <!-- 2. 实测光谱库标题 + 打开参考库独立窗口按钮 -->
+                    <Border DockPanel.Dock="Top" Background="#F1F5F9" CornerRadius="8" Padding="10,6" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="📊 实测光谱库" Foreground="#0F172A" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" x:Name="BtnReferenceLibrary" Content="📚 标准参考库" Click="BtnReferenceLibrary_Click"
+                                    Style="{StaticResource SecondaryButtonStyle}" Padding="14,5"
+                                    ToolTip="打开独立的标准参考库窗口"/>
+                        </Grid>
                     </Border>
 
                     <!-- 3. 数据表格 -->
@@ -334,6 +336,7 @@
                             <Button x:Name="BtnMlClassify" Content="🤖 算法分类" Click="BtnMlClassify_Click" Style="{StaticResource SecondaryButtonStyle}" 
                                     Background="#F5F3FF" Foreground="#7C3AED" BorderBrush="#DDD6FE" Margin="0,0,6,0" Padding="12,5"
                                     ToolTip="利用特征向量进行多分类判定（比对当前选中的单谱线）"/>
+                            
                         </StackPanel>
                     </Grid>
                 </Border>

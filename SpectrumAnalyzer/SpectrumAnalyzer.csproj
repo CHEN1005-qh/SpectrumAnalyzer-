@@ -14,6 +14,8 @@
     <WarningLevel>4</WarningLevel>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
+    <!-- 关闭 Roslyn 共享编译服务器，避免 VBCSCompiler 占用 obj\Debug\*.dll 导致 CS2012 -->
+    <UseSharedCompilation>false</UseSharedCompilation>
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
   </PropertyGroup>
@@ -147,6 +149,12 @@
     <Compile Include="SpectrumDetailWindow.xaml.cs">
       <DependentUpon>SpectrumDetailWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="CategoryManagerWindow.xaml.cs">
+      <DependentUpon>CategoryManagerWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ReferenceLibraryWindow.xaml.cs">
+      <DependentUpon>ReferenceLibraryWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="ViewModels\MainViewModel.cs" />
     <Compile Include="ViewModels\ViewModelBase.cs" />
     <Page Include="MainWindow.xaml">
@@ -174,6 +182,14 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="SpectrumDetailWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="CategoryManagerWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ReferenceLibraryWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

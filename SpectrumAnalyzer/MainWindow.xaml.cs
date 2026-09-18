@@ -78,24 +78,14 @@ namespace SpectrumAnalyzer
             {
                 if (_viewModel == null) return;
 
-                if (RbExperimental.IsChecked == true)
+                if (_viewModel.RamanSpectraList != null)
                 {
-                    if (_viewModel.RamanSpectraList != null)
-                    {
-                        foreach (var it in _viewModel.RamanSpectraList) it.IsChecked = true;
-                    }
-                }
-                else
-                {
-                    if (_viewModel.ReferenceSpectraList != null)
-                    {
-                        foreach (var it in _viewModel.ReferenceSpectraList) it.IsChecked = true;
-                    }
+                    foreach (var it in _viewModel.RamanSpectraList) it.IsChecked = true;
                 }
 
                 DgMain.Items.Refresh();
             }
-            catch { }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
         }
 
         /// <summary>
@@ -107,24 +97,14 @@ namespace SpectrumAnalyzer
             {
                 if (_viewModel == null) return;
 
-                if (RbExperimental.IsChecked == true)
+                if (_viewModel.RamanSpectraList != null)
                 {
-                    if (_viewModel.RamanSpectraList != null)
-                    {
-                        foreach (var it in _viewModel.RamanSpectraList) it.IsChecked = false;
-                    }
-                }
-                else
-                {
-                    if (_viewModel.ReferenceSpectraList != null)
-                    {
-                        foreach (var it in _viewModel.ReferenceSpectraList) it.IsChecked = false;
-                    }
+                    foreach (var it in _viewModel.RamanSpectraList) it.IsChecked = false;
                 }
 
                 DgMain.Items.Refresh();
             }
-            catch { }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
         }
 
         private void BtnOpen_Click(object sender, RoutedEventArgs e)
@@ -178,9 +158,9 @@ namespace SpectrumAnalyzer
                                 successCount++;
                             }
                         }
-                        catch { }
+                        catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                     }
-                    catch { }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                 }
 
                 // 批量完成后从数据库重新加载 ViewModel 缓存并刷新 UI 列表
@@ -188,7 +168,7 @@ namespace SpectrumAnalyzer
                 {
                     _viewModel?.ReloadDataList();
                 }
-                catch { }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                 RefreshMainList();
                 TxtFileInfo.Text = $"已导入 {successCount}/{total} 个文件";
                 if (successCount == 0)
@@ -253,133 +233,18 @@ namespace SpectrumAnalyzer
         }
 
         /// <summary>
-        /// 左侧工具栏：导出选中光谱为 CSV
-        /// </summary>
-        private void BtnExport_Click(object sender, RoutedEventArgs e)
-        {
-            // 导出整个标准参考库为 JSON 文件
-            try
-            {
-                if (RbReference.IsChecked != true)
-                {
-                    MessageBox.Show("该导出功能仅用于标准参考库，请先切换到“标准参考库”选项卡。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
-
-                // 获取参考库数据（优先使用 ViewModel 缓存）
-                var list = _viewModel?.ReferenceSpectraList != null ? new System.Collections.Generic.List<ReferenceSpectrumModel>(_viewModel.ReferenceSpectraList) : _viewModel?.ReferenceRepository?.GetAll();
-
-                if (list == null || list.Count == 0)
-                {
-                    MessageBox.Show("标准参考库为空，无法导出。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
-
-                var saveDialog = new SaveFileDialog
-                {
-                    DefaultExt = ".json",
-                    Filter = "JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*",
-                    FileName = "reference_library.json"
-                };
-
-                if (saveDialog.ShowDialog() == true)
-                {
-                    var json = Newtonsoft.Json.JsonConvert.SerializeObject(list, Newtonsoft.Json.Formatting.Indented);
-                    System.IO.File.WriteAllText(saveDialog.FileName, json, System.Text.Encoding.UTF8);
-                    MessageBox.Show("标准参考库已导出为 JSON。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"导出失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        /// <summary>
-        /// 左侧工具栏：使用 CSV 智能导入向导导入文件
-        /// </summary>
-        private void BtnImport_Click(object sender, RoutedEventArgs e)
-        {
-            // 导入整个标准参考库（JSON 格式）
-            try
-            {
-                if (RbReference.IsChecked != true)
-                {
-                    MessageBox.Show("该导入功能仅用于标准参考库，请先切换到“标准参考库”选项卡。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
-
-                var dlg = new Microsoft.Win32.OpenFileDialog()
-                {
-                    Filter = "JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*",
-                    Multiselect = false
-                };
-
-                bool? ok = dlg.ShowDialog(this);
-                if (ok != true) return;
-
-                string txt = System.IO.File.ReadAllText(dlg.FileName);
-
-                System.Collections.Generic.List<ReferenceSpectrumModel> list = null;
-                try
-                {
-                    list = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<ReferenceSpectrumModel>>(txt);
-                }
-                catch
-                {
-                    try
-                    {
-                        var single = Newtonsoft.Json.JsonConvert.DeserializeObject<ReferenceSpectrumModel>(txt);
-                        if (single != null)
-                            list = new System.Collections.Generic.List<ReferenceSpectrumModel> { single };
-                    }
-                    catch { }
-                }
-
-                if (list == null || list.Count == 0)
-                {
-                    MessageBox.Show("未能从 JSON 文件中解析出标准库数据。请确认文件格式为导出的参考库 JSON。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
-
-                // 补充 CreatedAt 字段及默认值
-                foreach (var item in list)
-                {
-                    if (string.IsNullOrEmpty(item.CreatedAt)) item.CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                    if (item.PeaksJson == null) item.PeaksJson = "[]";
-                    if (item.X_cm == null) item.X_cm = "[]";
-                    if (item.Y_cm == null) item.Y_cm = "[]";
-                }
-
-                _viewModel.ReferenceRepository.ImportReferenceSpectra(list);
-
-                // 刷新 ViewModel 缓存并 UI 列表
-                if (_viewModel != null)
-                {
-                    var refreshed = _viewModel.ReferenceRepository.GetAll();
-                    _viewModel.ReferenceSpectraList = new System.Collections.ObjectModel.ObservableCollection<ReferenceSpectrumModel>(refreshed);
-                    _viewModel.PreprocessStatus = $"已导入 {list.Count} 条参考谱到标准库";
-                }
-
-                RefreshMainList();
-                MessageBox.Show($"成功导入 {list.Count} 条参考谱到标准库。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"导入失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        /// <summary>
         /// ViewModel 属性变化处理
         /// </summary>
         private void ViewModel_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            // 监听关键属性变化，触发UI更新
-            if (e.PropertyName == nameof(MainViewModel.CurrentYProcessed))
+            // 异步预处理完成后数据已更新，刷新绘图以展示最新结果
+            if (e.PropertyName == nameof(MainViewModel.CurrentXProcessed) ||
+                e.PropertyName == nameof(MainViewModel.CurrentYProcessed) ||
+                e.PropertyName == nameof(MainViewModel.CurrentPeaks) ||
+                e.PropertyName == nameof(MainViewModel.CurrentX) ||
+                e.PropertyName == nameof(MainViewModel.CurrentYRaw))
             {
-                // 预处理完成，更新绘图（可选，如果需要自动刷新）
-                // RefreshPlot();
+                RefreshPlot();
             }
         }
 
@@ -411,49 +276,25 @@ namespace SpectrumAnalyzer
                     return;
                 }
 
-                // 根据当前视图选择对应集合
-                if (RbExperimental.IsChecked == true)
+                // 删除实测光谱记录
+                var toDelete = _viewModel.RamanSpectraList?.Where(x => x.IsChecked).ToList() ?? new System.Collections.Generic.List<RamanSpectrumModel>();
+                if (toDelete.Count == 0)
                 {
-                    var toDelete = _viewModel.RamanSpectraList?.Where(x => x.IsChecked).ToList() ?? new System.Collections.Generic.List<RamanSpectrumModel>();
-                    if (toDelete.Count == 0)
-                    {
-                        MessageBox.Show("请先在列表中勾选要删除的实测光谱记录。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                        return;
-                    }
-
-                    if (MessageBox.Show($"确认删除选中的 {toDelete.Count} 条实测光谱？", "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
-                        return;
-
-                    foreach (var item in toDelete)
-                    {
-                        try { _viewModel.RamanRepository.Delete(item.Id); }
-                        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"删除实测光谱 {item.Id} 失败: {ex.Message}"); }
-                    }
-
-                    RefreshMainList();
-                    MessageBox.Show($"已删除 {toDelete.Count} 条实测光谱。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show("请先在列表中勾选要删除的实测光谱记录。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
                 }
-                else
+
+                if (MessageBox.Show($"确认删除选中的 {toDelete.Count} 条实测光谱？", "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                    return;
+
+                foreach (var item in toDelete)
                 {
-                    var toDelete = _viewModel.ReferenceSpectraList?.Where(x => x.IsChecked).ToList() ?? new System.Collections.Generic.List<ReferenceSpectrumModel>();
-                    if (toDelete.Count == 0)
-                    {
-                        MessageBox.Show("请先在列表中勾选要删除的参考光谱记录。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                        return;
-                    }
-
-                    if (MessageBox.Show($"确认删除选中的 {toDelete.Count} 条参考光谱？", "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
-                        return;
-
-                    foreach (var item in toDelete)
-                    {
-                        try { _viewModel.ReferenceRepository.Delete(item.Id); }
-                        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"删除参考光谱 {item.Id} 失败: {ex.Message}"); }
-                    }
-
-                    RefreshMainList();
-                    MessageBox.Show($"已删除 {toDelete.Count} 条参考光谱。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
+                    try { _viewModel.RamanRepository.Delete(item.Id); }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"删除实测光谱 {item.Id} 失败: {ex.Message}"); }
                 }
+
+                RefreshMainList();
+                MessageBox.Show($"已删除 {toDelete.Count} 条实测光谱。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
@@ -493,6 +334,7 @@ namespace SpectrumAnalyzer
                 // 打开录入对话框，传入默认名称和检测到的峰位与全谱缓存
                 var saveWin = new SaveWindow(_viewModel.CurrentSubstanceName ?? "新物质", peaks ?? new System.Collections.Generic.List<PeakInfo>(), px, py);
                 saveWin.Owner = this;
+                saveWin.CategorySource = _viewModel.CategoryRepository;
                 bool? ok = saveWin.ShowDialog();
                 if (ok == true && saveWin.ResultModel != null)
                 {
@@ -546,7 +388,7 @@ namespace SpectrumAnalyzer
                 {
                     foreach (var p in _overlayPlottables)
                     {
-                        try { MainPlot.Plot.Remove(p); } catch { }
+                        try { MainPlot.Plot.Remove(p); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                     }
                     _overlayPlottables.Clear();
                 }
@@ -574,8 +416,12 @@ namespace SpectrumAnalyzer
                         {
                             try
                             {
-                                var x = SpectrumProcessingService.DeserializeSpectrumData(r.X_cm);
-                                var y = SpectrumProcessingService.DeserializeSpectrumData(r.Y_cm);
+                                // 列表项为轻量数据，按需拉取含全谱的完整记录
+                                var full = _viewModel.RamanRepository.GetById(r.Id);
+                                if (full == null) continue;
+
+                                var x = SpectrumProcessingService.DeserializeSpectrumData(full.X_cm);
+                                var y = SpectrumProcessingService.DeserializeSpectrumData(full.Y_cm);
                                 if (x == null || y == null || x.Length == 0 || y.Length == 0) continue;
 
                                 int n = Math.Min(x.Length, y.Length);
@@ -591,7 +437,7 @@ namespace SpectrumAnalyzer
                                 colorIdx++;
                                 anyPlotted = true;
                             }
-                            catch { }
+                            catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                         }
                     }
 
@@ -607,16 +453,20 @@ namespace SpectrumAnalyzer
                 }
                 else if (DgMain.SelectedItem is ReferenceSpectrumModel refSpectrum)
                 {
-                    _viewModel.SelectedReferenceSpectrum = refSpectrum;
+                    // 列表项为轻量数据，按需拉取含全谱的完整记录
+                    var fullRef = _viewModel.ReferenceRepository.GetById(refSpectrum.Id);
+                    if (fullRef == null) return;
+
+                    _viewModel.SelectedReferenceSpectrum = fullRef;
                     // 加载参考光谱预览并在右侧绘图区显示
                     try
                     {
-                        ShowReferenceSpectrum(refSpectrum);
+                        ShowReferenceSpectrum(fullRef);
                     }
-                    catch { }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                 }
             }
-            catch { }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
         }
 
         /// <summary>
@@ -629,13 +479,15 @@ namespace SpectrumAnalyzer
                 // 仅针对实测库的行双击打开详情编辑窗口
                 if (DgMain.SelectedItem is RamanSpectrumModel model)
                 {
-                    var win = new SpectrumDetailWindow(model) { Owner = this };
+                    // 编辑需完整记录，避免用轻量摘要保存时清空全谱 BLOB 列
+                    var full = _viewModel.RamanRepository.GetById(model.Id) ?? model;
+                    var win = new SpectrumDetailWindow(full) { Owner = this };
                     bool? ok = win.ShowDialog();
                     if (ok == true)
                     {
                         try
                         {
-                            _viewModel.RamanRepository.Update(model);
+                            _viewModel.RamanRepository.Update(full);
                             RefreshMainList();
                         }
                         catch (Exception ex)
@@ -648,14 +500,17 @@ namespace SpectrumAnalyzer
                 {
                     try
                     {
-                        var win = new SaveWindow(refModel) { Owner = this };
+                        // 编辑需完整记录，避免用轻量摘要保存时清空全谱 JSON 列
+                        var fullRef = _viewModel.ReferenceRepository.GetById(refModel.Id) ?? refModel;
+                        var win = new SaveWindow(fullRef) { Owner = this };
+                        win.CategorySource = _viewModel.CategoryRepository;
                         bool? ok = win.ShowDialog();
                         if (ok == true && win.ResultModel != null)
                         {
                             try
                             {
                                 _viewModel.ReferenceRepository.Update(win.ResultModel);
-                                try { _viewModel?.ReloadDataList(); } catch { }
+                                try { _viewModel?.ReloadDataList(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                                 RefreshMainList();
                             }
                             catch (Exception ex)
@@ -664,10 +519,10 @@ namespace SpectrumAnalyzer
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                 }
             }
-            catch { }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
         }
 
         /// <summary>
@@ -763,7 +618,7 @@ namespace SpectrumAnalyzer
                 {
                     foreach (var p in _refPlottables)
                     {
-                        try { MainPlot.Plot.Remove(p); } catch { }
+                        try { MainPlot.Plot.Remove(p); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                     }
                     _refPlottables.Clear();
                 }
@@ -828,7 +683,7 @@ namespace SpectrumAnalyzer
             {
                 foreach (var p in _refPlottables)
                 {
-                    try { MainPlot.Plot.Remove(p); } catch { }
+                    try { MainPlot.Plot.Remove(p); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                 }
                 _refPlottables.Clear();
             }
@@ -866,7 +721,7 @@ namespace SpectrumAnalyzer
                         var bytes = System.Text.Encoding.UTF8.GetBytes(refModel.X_cm);
                         x = SpectrumProcessingService.DeserializeSpectrumData(bytes);
                     }
-                    catch { }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                 }
 
                 if ((y == null || y.Length == 0) && refModel.Y_cm != null)
@@ -876,10 +731,10 @@ namespace SpectrumAnalyzer
                         var bytes = System.Text.Encoding.UTF8.GetBytes(refModel.Y_cm);
                         y = SpectrumProcessingService.DeserializeSpectrumData(bytes);
                     }
-                    catch { }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                 }
             }
-            catch { }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
 
             if (x == null || y == null || x.Length == 0 || y.Length == 0)
             {
@@ -944,37 +799,30 @@ namespace SpectrumAnalyzer
 
         #endregion
 
-        #region 左侧库视图切换事件
+        #region 参考库独立窗口
 
-        private void RbReference_Checked(object sender, RoutedEventArgs e)
+        /// <summary>
+        /// 打开独立的标准参考库窗口；关闭后刷新实测列表（数据可能有同步变更）
+        /// </summary>
+        private void BtnReferenceLibrary_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                if (_viewModel != null)
+                if (_viewModel == null)
                 {
-                    _viewModel.IsRamanMode = false;
-                    RefreshMainList();
+                    MessageBox.Show("未找到 ViewModel 实例。");
+                    return;
                 }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"切换到参考库失败: {ex.Message}");
-            }
-        }
 
-        private void RbExperimental_Checked(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                if (_viewModel != null)
-                {
-                    _viewModel.IsRamanMode = true;
-                    RefreshMainList();
-                }
+                var win = new ReferenceLibraryWindow(_viewModel) { Owner = this };
+                win.ShowDialog();
+
+                _viewModel.ReloadDataList();
+                RefreshMainList();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"切换到实测库失败: {ex.Message}");
+                MessageBox.Show($"打开标准参考库窗口失败: {ex.Message}");
             }
         }
 
@@ -1035,12 +883,9 @@ namespace SpectrumAnalyzer
                 checkColumn.CellTemplate = new DataTemplate { VisualTree = factory };
                 DgMain.Columns.Add(checkColumn);
 
-                // 2. 根据模式加载数据
-                if (RbExperimental.IsChecked == true)
+                // 2. 加载实测光谱数据
+                if (_viewModel != null)
                 {
-                    // 实测光谱模式
-                    if (_viewModel != null)
-                    {
                         DgMain.ItemsSource = _viewModel.RamanSpectraList;
                         AddColumn("ID", "Id", 50);
                         AddColumn("样品名称", "Name", 120);
@@ -1057,26 +902,6 @@ namespace SpectrumAnalyzer
                         AddColumn("备注/实测成分", "Note_Display", 150);
                     }
                 }
-                else
-                {
-                    // 参考光谱模式
-                    if (_viewModel != null)
-                    {
-                        DgMain.ItemsSource = _viewModel.ReferenceSpectraList;
-                        AddColumn("ID", "Id", 50);
-                        AddColumn("物质名称", "SubstanceName", 130);
-                        AddColumn("化学式", "ChemicalFormula", 110);
-                        AddColumn("CAS号", "CasNumber", 110);
-                        AddColumn("激发波长", "ExcitationWavelength", 100);
-                        AddColumn("光栅", "Grating", 100);
-                        AddColumn("特征指纹峰位", "PeaksJson_Display", 150);
-                        AddColumn("创建时间", "CreatedAt", 140);
-                        AddColumn("标准全谱X", "X_cm_Display", 120);
-                        AddColumn("标准全谱Y", "Y_cm_Display", 120);
-                        AddColumn("备注", "Note_Display", 150);
-                    }
-                }
-            }
             catch (Exception ex)
             {
                 MessageBox.Show($"刷新失败: {ex.Message}");

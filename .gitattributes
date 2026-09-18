@@ -61,3 +61,26 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+###############################################################################
+# .NET / C# 项目规则
+###############################################################################
+# 文本类文件统一处理
+*.cs         text diff=csharp
+*.xaml       text
+*.csproj     text merge=binary
+*.vbproj     text merge=binary
+*.sln        text merge=binary
+*.slnx       text merge=binary
+*.config     text
+*.resx       text
+*.settings   text
+*.json       text
+
+# 二进制资源不做行尾转换
+*.png        binary
+*.jpg        binary
+*.jpeg       binary
+*.ico        binary
+*.bmp        binary
+*.gif        binary
