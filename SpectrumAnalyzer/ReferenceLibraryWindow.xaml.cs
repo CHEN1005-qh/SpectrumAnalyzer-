@@ -71,6 +71,10 @@ namespace SpectrumAnalyzer
                     CmbCategory.SelectedItem = "全部";
 
                 TxtStatus.Text = $"标准库共 {currentList.Count} 条记录";
+
+                // 显式重算展示列表，确保 DgRef 重新绑定到最新数据（ComboBox 的
+                // SelectionChanged 在 ItemsSource 整体重建时不保证触发）
+                ApplyFilter();
             }
             catch (Exception ex)
             {
