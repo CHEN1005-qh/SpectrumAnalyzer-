@@ -89,22 +89,9 @@
                         <Setter Property="Background" Value="#F1F5F9"/>
                         <Setter Property="Foreground" Value="#475569"/>
                         <Setter Property="FontWeight" Value="SemiBold"/>
-                        <Setter Property="HorizontalContentAlignment" Value="Center"/>
                         <Setter Property="Padding" Value="10,8"/>
                         <Setter Property="BorderBrush" Value="#E2E8F0"/>
                         <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                    </Style>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- 所有文本列表列：水平手动对齐到居中（含垂直居中） -->
-        <Style TargetType="DataGridTextColumn">
-            <Setter Property="ElementStyle">
-                <Setter.Value>
-                    <Style TargetType="TextBlock">
-                        <Setter Property="TextAlignment" Value="Center"/>
-                        <Setter Property="VerticalAlignment" Value="Center"/>
                     </Style>
                 </Setter.Value>
             </Setter>
