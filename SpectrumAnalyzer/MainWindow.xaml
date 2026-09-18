@@ -303,28 +303,17 @@
                     </Border.Effect>
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- 左侧：算法微调控制组 -->
-                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- 全部功能按钮合并到右侧一组，按流程顺序排列 -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button x:Name="BtnSettings" Content="⚙ 算法参数" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,6,0" Padding="12,5" Click="BtnSettings_Click"/>
-                            <!-- 智能调优按钮已移除 -->
                             <Button x:Name="BtnDoPreprocess" Content="✨ 预处理" Click="BtnDoPreprocess_Click" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,6,0" 
                                     Padding="15,5" FontWeight="Bold"/>
-                        </StackPanel>
-
-                        <!-- 中间：物理分隔线 -->
-                        <Rectangle Grid.Column="1" Width="1" Height="22" Fill="#E2E8F0" HorizontalAlignment="Center"/>
-
-                        <!-- 右侧：比对与归档操作组 -->
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Content="➕ 入库" Style="{StaticResource SuccessButtonStyle}" Margin="0,0,8,0" Padding="12,5" Click="BtnAddToLibrary_Click"/>
-
                             <Button x:Name="BtnMatch" Content="🔍 智能比对" Click="BtnMatch_Click" Style="{StaticResource BrandButtonStyle}" Padding="18,5"/>
-
                         </StackPanel>
                     </Grid>
                 </Border>
