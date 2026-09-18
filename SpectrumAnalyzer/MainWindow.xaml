@@ -281,7 +281,7 @@
                               IsReadOnly="False" SelectionMode="Extended"
                               SelectionChanged="DgMain_SelectionChanged" 
                               Style="{StaticResource ModernDataGridStyle}"
-                              FontSize="13" MouseDoubleClick="DgMain_MouseDoubleClick">
+                              RowHeight="42" FontSize="13" MouseDoubleClick="DgMain_MouseDoubleClick">
                         <!-- 数据列通过后台 RefreshMainList() 动态注入 -->
                     </DataGrid>
                 </DockPanel>

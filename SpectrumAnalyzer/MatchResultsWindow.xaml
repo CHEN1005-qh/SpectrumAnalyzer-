@@ -118,7 +118,7 @@
                       SelectionMode="Single"
                       Style="{StaticResource ModernDataGrid}" 
                       FontSize="13.5" 
-                      RowHeight="32">
+                      RowHeight="42">
                 <DataGrid.Columns>
                     <!-- 物质名称 -->
                     <DataGridTextColumn Header="标准物质名称" Binding="{Binding Name}" Width="160" 
