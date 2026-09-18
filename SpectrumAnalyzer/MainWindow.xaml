@@ -332,11 +332,7 @@
                             </ComboBox>
 
                             <Button x:Name="BtnMatch" Content="🔍 智能比对" Click="BtnMatch_Click" Style="{StaticResource BrandButtonStyle}" Padding="18,5"/>
-                            <!-- MainWindow.xaml 工具栏的 StackPanel 内 -->
-                            <Button x:Name="BtnMlClassify" Content="🤖 算法分类" Click="BtnMlClassify_Click" Style="{StaticResource SecondaryButtonStyle}" 
-                                    Background="#F5F3FF" Foreground="#7C3AED" BorderBrush="#DDD6FE" Margin="0,0,6,0" Padding="12,5"
-                                    ToolTip="利用特征向量进行多分类判定（比对当前选中的单谱线）"/>
-                            
+
                         </StackPanel>
                     </Grid>
                 </Border>

@@ -46,7 +46,6 @@
     <Compile Include="AlgorithmConfig.cs" />
     <Compile Include="SubstanceModel.cs" />
     <Compile Include="PreprocessingService.cs" />
-    <Compile Include="KnnClassifier.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

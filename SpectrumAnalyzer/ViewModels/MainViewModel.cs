@@ -19,7 +19,6 @@ namespace SpectrumAnalyzer.ViewModels
     public class MainViewModel : ViewModelBase
     {
         private readonly SpectrumProcessingService _processingService;
-        private readonly SpectrumMatchingService _matchingService;
         public IRamanSpectrumRepository RamanRepository { get; }
         public IReferenceSpectrumRepository ReferenceRepository { get; }
         public ICategoryRepository CategoryRepository { get; }
@@ -28,10 +27,6 @@ namespace SpectrumAnalyzer.ViewModels
         private string _currentSubstanceName = "未知物质";
         private string _preprocessStatus = "就绪，等待输入";
         private AlgorithmConfig _currentConfig;
-
-        // 分类结果属性
-        private string _classificationResult = "";
-        private double _classificationConfidence = 0.0;
 
         // 光谱数据
         private ObservableCollection<RamanSpectrumModel> _ramanSpectraList;
@@ -50,7 +45,6 @@ namespace SpectrumAnalyzer.ViewModels
         // 命令
         private RelayCommand _loadRamanDataCommand;
         private ICommand _preprocessCommand;
-        private RelayCommand _classifyCommand;
         private RelayCommand _resetCommand;
         private RelayCommand _deleteCommand;
         private RelayCommand _saveCommand;
@@ -67,24 +61,6 @@ namespace SpectrumAnalyzer.ViewModels
         {
             get => _currentSubstanceName;
             set => SetProperty(ref _currentSubstanceName, value);
-        }
-
-        /// <summary>
-        /// 最近一次 KNN 分类判定的物质名称（用于 UI 展示）
-        /// </summary>
-        public string ClassificationResult
-        {
-            get => _classificationResult;
-            set => SetProperty(ref _classificationResult, value);
-        }
-
-        /// <summary>
-        /// 最近一次 KNN 分类的置信度 (0-1)
-        /// </summary>
-        public double ClassificationConfidence
-        {
-            get => _classificationConfidence;
-            set => SetProperty(ref _classificationConfidence, value);
         }
 
         /// <summary>
@@ -477,22 +453,6 @@ namespace SpectrumAnalyzer.ViewModels
             }
         }
 
-        /// <summary>
-        /// 执行分类命令
-        /// </summary>
-        public ICommand ClassifyCommand
-        {
-            get
-            {
-                if (_classifyCommand == null)
-                    _classifyCommand = new RelayCommand(ExecuteClassify);
-                return _classifyCommand;
-            }
-        }
-
-        /// <summary>
-        /// 重置处理状态命令
-        /// </summary>
         public ICommand ResetCommand
         {
             get
@@ -545,8 +505,6 @@ namespace SpectrumAnalyzer.ViewModels
             ReferenceRepository = new ReferenceSpectrumRepository(databaseService);
             CategoryRepository = new CategoryRepository(databaseService);
             _processingService = new SpectrumProcessingService(RamanRepository, ReferenceRepository);
-            // 初始化匹配服务（基于已有数据库）
-            _matchingService = new SpectrumMatchingService(ReferenceRepository);
 
             // 初始化配置
             _currentConfig = new AlgorithmConfig();
@@ -776,54 +734,6 @@ namespace SpectrumAnalyzer.ViewModels
             catch (Exception ex)
             {
                 PreprocessStatus = $"处理异常: {ex.Message}";
-                System.Diagnostics.Debug.WriteLine(ex);
-            }
-        }
-
-        /// <summary>
-        /// 执行分类（SNV+PCA+KNN 匹配）：将当前已处理光谱与标准库比对，
-        /// 判定结果写入 ClassificationResult / ClassificationConfidence
-        /// </summary>
-        private void ExecuteClassify()
-        {
-            try
-            {
-                var x = CurrentXProcessed;
-                var y = CurrentYProcessed;
-                if (x == null || y == null || x.Length == 0 || y.Length == 0)
-                {
-                    ClassificationResult = string.Empty;
-                    ClassificationConfidence = 0.0;
-                    PreprocessStatus = "错误：当前无已处理光谱可用于分类，请先加载并预处理光谱";
-                    return;
-                }
-
-                var library = ReferenceRepository.GetAll();
-                if (library == null || library.Count == 0)
-                {
-                    ClassificationResult = string.Empty;
-                    ClassificationConfidence = 0.0;
-                    PreprocessStatus = "分类失败：标准库为空，请先导入标准参考光谱";
-                    return;
-                }
-
-                PreprocessStatus = "正在执行算法分类 (SNV + PCA + KNN)...";
-
-                // 使用静态 Predict：将标准谱重采样对齐到当前光谱坐标轴后训练并预测，规避长度不一致
-                var result = KnnClassifier.Predict(x, y, library, k: 3);
-
-                ClassificationResult = result?.PredictedClass ?? string.Empty;
-                ClassificationConfidence = result?.Confidence ?? 0.0;
-                CurrentSubstanceName = string.IsNullOrEmpty(ClassificationResult)
-                    ? "未知物质"
-                    : ClassificationResult;
-                PreprocessStatus = $"算法分类完成: {(string.IsNullOrEmpty(ClassificationResult) ? "未知物质" : ClassificationResult)} (置信度 {ClassificationConfidence:P})";
-            }
-            catch (Exception ex)
-            {
-                ClassificationResult = string.Empty;
-                ClassificationConfidence = 0.0;
-                PreprocessStatus = $"分类失败: {ex.Message}";
                 System.Diagnostics.Debug.WriteLine(ex);
             }
         }

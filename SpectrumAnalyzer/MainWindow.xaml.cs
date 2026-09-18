@@ -368,15 +368,6 @@ namespace SpectrumAnalyzer
         }
 
         /// <summary>
-        /// 算法分类按钮 → 转发到 ClassifyCommand
-        /// </summary>
-        private void BtnMlClassify_Click(object sender, RoutedEventArgs e)
-        {
-            if (_viewModel?.ClassifyCommand.CanExecute(null) == true)
-                _viewModel.ClassifyCommand.Execute(null);
-        }
-
-        /// <summary>
         /// 数据表格选择变化
         /// </summary>
         private void DgMain_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -545,8 +536,6 @@ namespace SpectrumAnalyzer
                 {
                     ExportedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                     SubstanceName = _viewModel?.CurrentSubstanceName,
-                    Classification = _viewModel?.ClassificationResult,
-                    ClassificationConfidence = _viewModel?.ClassificationConfidence,
                     X = _viewModel?.CurrentXProcessed,
                     Y = _viewModel?.CurrentYProcessed,
                     Peaks = _viewModel?.CurrentPeaks?
