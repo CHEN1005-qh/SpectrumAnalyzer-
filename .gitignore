@@ -372,3 +372,11 @@ FodyWeavers.xsd
 *.db-journal
 *.db-shm
 *.db-wal
+
+# Windows 系统生成文件
+Desktop.ini
+Thumbs.db
+ehthumbs.db
+
+# 截图临时目录
+.screenshots/.tmp/
